@@ -399,6 +399,97 @@ create table learning_progress (
 
 ---
 
+## Backend TODO — System Architecture & Implementation
+
+Everything below is the backend/system work needed to turn the UI prototype into a working product. Organized in build order — each tier unlocks the next.
+
+### Tier 1: Foundation — Auth, Database & Storage
+
+Get real users, real data, and real files into the system. Everything else depends on this.
+
+- [ ] **Supabase project setup** — Create project, configure env vars, connect to Next.js
+- [ ] **Authentication** — Supabase Auth with email + Google OAuth, protect `/app` routes with middleware, session management
+- [ ] **Database schema** — Run migrations for all tables (profiles, subjects, documents, chats, chat_messages, notes, generated_content, learning_progress). Schema already drafted above — review and finalize
+- [ ] **Row-level security (RLS)** — Users can only access their own data. Critical even for MVP
+- [ ] **File storage** — Supabase Storage bucket for uploads (PDFs, DOCX, audio). Signed URLs for secure access. Set size limits (10MB free tier, 50MB pro)
+- [ ] **Subjects CRUD** — Create, rename, delete, reorder subjects. Wire up sidebar + dashboard to real data instead of mock
+- [ ] **Documents CRUD** — Upload file → store in Storage → save metadata to `documents` table. Wire up subject page content list
+
+### Tier 2: Document Processing Pipeline
+
+Turn uploaded files into text the AI can work with.
+
+- [ ] **PDF text extraction** — `pdf-parse` or `pdfjs-dist` on server. Extract text per page, store in `documents.raw_text`
+- [ ] **DOCX text extraction** — `mammoth` for DOCX → text/HTML
+- [ ] **PPTX text extraction** — `officegen` or similar. Lower priority — start with PDF + DOCX
+- [ ] **Link content extraction** — Fetch URL, extract readable content with Mozilla Readability or `cheerio`. Store extracted text
+- [ ] **Pasted text** — Simplest case, store directly
+- [ ] **PDF rendering in viewer** — `react-pdf` or `@pdfjs-dist/viewer` to render actual PDF pages in the document viewer. Replace current mock formatted text
+- [ ] **Processing queue** — For larger files or batches, run extraction async. Can start synchronous for MVP, add a queue (Supabase Edge Functions or a simple job table) later
+
+### Tier 3: Basic AI — Chat & Generation (No RAG)
+
+Get Claude working for basic features. Start without vector search — just pass document text directly in context.
+
+- [ ] **Claude API integration** — Server-side API route (`/api/chat`), handle streaming responses
+- [ ] **Basic chat** — Send the document's `raw_text` (or first N tokens) + user message to Claude. Stream response back. Works for docs under ~100K tokens
+- [ ] **Chat history persistence** — Save messages to `chat_messages` table. Load history when reopening a chat. Support multiple chat threads per document
+- [ ] **Summary generation** — Send document text to Claude with a summary prompt. Save result to `generated_content` table
+- [ ] **Lesson plan generation** — Claude analyzes content, returns structured steps. Save to `generated_content`
+- [ ] **Notes persistence** — Auto-save notes to `notes` table. Load on page open. Rich text editor (consider Tiptap or similar) instead of plain textarea
+- [ ] **"My Sets" persistence** — Save/load generated summaries, lesson plans, notes. Wire up the My Sets list in the home view to real data
+- [ ] **Streaming UI** — Show Claude's response token-by-token in the chat interface. Use Vercel AI SDK or manual SSE handling
+
+### Tier 4: RAG — Vector Search for Document Q&A
+
+For longer documents or when you need precise answers from specific sections, basic context stuffing won't cut it. This is the upgrade path.
+
+- [ ] **Enable pgvector** — Turn on the `vector` extension in Supabase Postgres
+- [ ] **Text chunking** — Split `raw_text` into ~500-token chunks with ~50-token overlap. Store in `document_chunks` table with `document_id` and `chunk_index`
+- [ ] **Embedding generation** — Generate embeddings for each chunk. Options:
+  - Voyage AI embeddings (good quality, reasonable cost)
+  - OpenAI `text-embedding-3-small` (cheap, fast)
+  - Cohere embed (good for search)
+  - Start with one, can swap later
+- [ ] **Store embeddings** — Save vectors to `document_chunks.embedding` column (pgvector `vector(1536)` or similar)
+- [ ] **Retrieval pipeline** — When user asks a question: embed the query → cosine similarity search in pgvector → return top-k chunks
+- [ ] **RAG prompt** — Send retrieved chunks + user question to Claude: "Based on these excerpts from the document: [chunks]. Answer the user's question: [question]"
+- [ ] **Hybrid search** — Combine vector similarity with keyword search (Supabase full-text search) for better results. Optional but nice for V1
+- [ ] **Chunking strategies to explore later:**
+  - Semantic chunking (split at natural boundaries like headings/paragraphs)
+  - Sliding window with different sizes
+  - Hierarchical chunking (document → section → paragraph)
+  - Chunk size tuning based on embedding model
+
+### Tier 5: Scale & Polish
+
+Once the core works, make it production-ready for a commercial product.
+
+- [ ] **Rate limiting** — Limit AI calls per user per day (free tier vs pro)
+- [ ] **Error handling** — Graceful failures for AI timeouts, file processing errors, storage limits
+- [ ] **Background processing** — Move document parsing + embedding generation to background jobs (Supabase Edge Functions or a worker)
+- [ ] **Caching** — Cache generated summaries and lesson plans so they don't re-generate on every page load
+- [ ] **Usage tracking** — Track AI token usage per user for billing
+- [ ] **File type detection** — Validate uploads server-side, not just by extension
+- [ ] **Audio transcription** — Whisper API or Deepgram for recorded lectures (future)
+- [ ] **YouTube transcript extraction** — For link uploads that are YouTube URLs
+- [ ] **Search across subjects** — Full-text search across all user documents
+- [ ] **Real-time auto-save** — Debounced saves for notes, optimistic UI
+- [ ] **Stripe integration** — For pro tier billing when ready to monetize
+
+### Decision Log
+
+| Decision | Options | Recommendation for MVP |
+|----------|---------|----------------------|
+| Vector DB | Supabase pgvector vs Pinecone vs Weaviate | **pgvector** — keeps everything in Supabase, one less service |
+| Embeddings | Voyage AI vs OpenAI vs Cohere | Start with **OpenAI text-embedding-3-small** (cheapest, fast) |
+| Doc parsing | Server-side vs Edge Functions | **Server-side API routes** — simpler, can move to edge later |
+| Chat streaming | Vercel AI SDK vs manual SSE | **Vercel AI SDK** — handles streaming, works great with Next.js |
+| Notes editor | Textarea vs Tiptap vs Plate | **Tiptap** — rich text, extensible, good DX. Textarea for MVP-MVP |
+| PDF viewer | react-pdf vs pdf.js direct | **react-pdf** (wraps pdf.js) — easier React integration |
+
+---
+
 ## Future (V2+)
 
 - **Search & Research**: Find relevant resources online for a topic, auto-build a learning path

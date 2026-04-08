@@ -1,13 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [role, setRole] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        router.push("/login");
+      } else {
+        setUserId(user.id);
+      }
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const roles = [
     "High School Student",
@@ -17,6 +33,26 @@ export default function OnboardingPage() {
     "Educator / Teacher",
     "Professional",
   ];
+
+  const handleSaveProfile = async () => {
+    if (!userId) return;
+    setSaving(true);
+
+    const { error } = await supabase.from("profiles").upsert({
+      id: userId,
+      first_name: firstName,
+      last_name: lastName,
+      role,
+    });
+
+    if (error) {
+      console.error("Failed to save profile:", error);
+      setSaving(false);
+      return;
+    }
+
+    router.push("/app");
+  };
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4">
@@ -122,13 +158,14 @@ export default function OnboardingPage() {
               <p className="mt-2 text-sm text-ink-light">
                 Let&apos;s create your first learning path.
               </p>
-              <a
-                href="/app"
-                className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7C5CFC] to-[#5B8DEF] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              <button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="mt-8 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7C5CFC] to-[#5B8DEF] px-6 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               >
-                Start Learning
+                {saving ? "Setting up..." : "Start Learning"}
                 <ArrowRight size={16} />
-              </a>
+              </button>
             </div>
           )}
 

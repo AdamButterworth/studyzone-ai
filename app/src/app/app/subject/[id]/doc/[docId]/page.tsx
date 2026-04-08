@@ -802,14 +802,14 @@ export default function DocumentPage() {
 
               {/* Ask anything — organic pill input */}
               <div className="shrink-0 px-4 pb-4">
-                <div className="flex items-center gap-2 rounded-full border border-black/8 bg-cream-dark/20 px-4 py-2.5 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
+                <div className="flex items-center rounded-full border border-black/8 bg-cream-dark/20 pr-3 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
                   <input
                     type="text"
                     value={homeQuery}
                     onChange={(e) => setHomeQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleHomeAsk()}
                     placeholder="Ask anything..."
-                    className="w-full bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/50"
+                    className="w-full rounded-full bg-transparent px-5 py-3.5 font-app text-[13px] outline-none placeholder:text-ink-muted/50"
                   />
                   <button
                     onClick={handleHomeAsk}

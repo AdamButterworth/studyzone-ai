@@ -11,7 +11,9 @@ import {
   Settings,
   HelpCircle,
   ChevronsLeft,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 interface AppSidebarProps {
   open: boolean;
@@ -33,6 +35,7 @@ const subjects = [
 export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [subjectsOpen, setSubjectsOpen] = useState(true);
+  const { profile, signOut } = useAuth();
 
   return (
     <aside className="font-app-sidebar relative flex h-full w-[280px] flex-col border-r border-black/5 bg-white">
@@ -171,12 +174,21 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
           {/* User profile */}
           <div className="mt-2 flex items-center gap-2.5 rounded-xl px-3 py-2">
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#5B8DEF] text-xs font-bold text-white">
-              A
+              {profile?.first_name?.[0]?.toUpperCase() || "?"}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">Adam B.</p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {profile ? `${profile.first_name} ${profile.last_name?.[0] || ""}.` : "Loading..."}
+              </p>
               <p className="text-[11px] text-ink-muted">Free Plan</p>
             </div>
+            <button
+              onClick={signOut}
+              className="shrink-0 rounded-lg p-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink"
+              title="Sign out"
+            >
+              <LogOut size={13} />
+            </button>
           </div>
         </div>
       </div>

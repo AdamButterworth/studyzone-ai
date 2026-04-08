@@ -1,6 +1,7 @@
 "use client";
 
 import { Search, PanelLeft } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 interface AppTopBarProps {
   sidebarOpen: boolean;
@@ -8,6 +9,8 @@ interface AppTopBarProps {
 }
 
 export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarProps) {
+  const { profile } = useAuth();
+
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 px-4">
       {/* Sidebar toggle */}
@@ -45,7 +48,7 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
       {/* Right actions */}
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#5B8DEF] text-xs font-bold text-white">
-          A
+          {profile?.first_name?.[0]?.toUpperCase() || "?"}
         </div>
       </div>
     </header>
