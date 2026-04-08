@@ -3,9 +3,9 @@
 import { Upload, Link, ClipboardPaste, Plus, Clock, ArrowRight, Search } from "lucide-react";
 
 const subjects = [
-  { name: "Reinforcement Learning", icon: "🧠", count: 3, updated: "2 hours ago" },
-  { name: "Organic Chemistry", icon: "🧪", count: 5, updated: "1 day ago" },
-  { name: "Constitutional Law", icon: "⚖️", count: 2, updated: "3 days ago" },
+  { name: "Reinforcement Learning", icon: "🧠", count: 3, updated: "2 hours ago", slug: "rl" },
+  { name: "Organic Chemistry", icon: "🧪", count: 5, updated: "1 day ago", slug: "chem" },
+  { name: "Constitutional Law", icon: "⚖️", count: 2, updated: "3 days ago", slug: "law" },
 ];
 
 const recents = [
@@ -74,16 +74,16 @@ export default function AppDashboard() {
 
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
           {/* New subject card */}
-          <button className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-black/10 bg-transparent px-4 py-8 text-center transition-colors hover:border-black/20 hover:bg-white/50">
+          <a href="/app/subject/new" className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-black/10 bg-transparent px-4 py-8 text-center transition-colors hover:border-black/20 hover:bg-white/50">
             <Plus size={24} strokeWidth={1.5} className="mb-2 text-ink-muted" />
             <span className="text-sm font-medium text-ink-light">New Subject</span>
-          </button>
+          </a>
 
           {/* Subject cards */}
           {subjects.map((subject) => (
             <a
               key={subject.name}
-              href="#"
+              href={`/app/subject/${subject.slug}`}
               className="flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
             >
               <span className="text-xl">{subject.icon}</span>

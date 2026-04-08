@@ -25,9 +25,9 @@ const recentDocs = [
 ];
 
 const subjects = [
-  { name: "Reinforcement Learning", icon: "🧠", count: 3 },
-  { name: "Organic Chemistry", icon: "🧪", count: 5 },
-  { name: "Constitutional Law", icon: "⚖️", count: 2 },
+  { name: "Reinforcement Learning", icon: "🧠", count: 3, slug: "rl" },
+  { name: "Organic Chemistry", icon: "🧪", count: 5, slug: "chem" },
+  { name: "Constitutional Law", icon: "⚖️", count: 2, slug: "law" },
 ];
 
 export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
@@ -55,10 +55,10 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
 
         {/* New subject button */}
         <div className="px-3 pb-2">
-          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50">
+          <a href="/app/subject/new" className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50">
             <Plus size={15} />
             New Subject
-          </button>
+          </a>
         </div>
 
         {/* Search */}
@@ -132,7 +132,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
               subjects.map((subject) => (
                 <a
                   key={subject.name}
-                  href="#"
+                  href={`/app/subject/${subject.slug}`}
                   className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
                 >
                   <div className="flex items-center gap-2 truncate">
