@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -36,27 +36,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const supabase = createClient();
 
+  const loadProfile = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error) {
+        console.error("Profile fetch error:", error.code, error.message);
+        setProfile(null);
+      } else {
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error("Profile fetch exception:", err);
+      setProfile(null);
+    }
+  }, [supabase]);
+
   useEffect(() => {
     const init = async () => {
       try {
-        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (userError) {
-          console.error("Auth getUser error:", userError.message);
+        if (sessionError) {
+          console.error("Session bootstrap error:", sessionError.message);
         }
 
+        const currentUser = session?.user ?? null;
+        console.log("Auth bootstrap:", currentUser ? `user ${currentUser.id}` : "no session");
         setUser(currentUser);
 
         if (currentUser) {
-          const { data, error: profileError } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", currentUser.id)
-            .single();
-
-          if (!profileError && data) {
-            setProfile(data);
-          }
+          await loadProfile(currentUser.id);
         }
       } catch (err) {
         console.error("Auth init error:", err);
@@ -69,23 +83,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      // Only handle actual sign-in/sign-out, not the initial session
-      if (_event === "INITIAL_SESSION") return;
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change:", event, session?.user?.id ?? "no user");
 
       const currentUser = session?.user ?? null;
       setUser(currentUser);
 
       if (currentUser) {
-        const { data } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", currentUser.id)
-          .single();
-        if (data) setProfile(data);
+        await loadProfile(currentUser.id);
       } else {
         setProfile(null);
       }
+
+      setLoading(false);
     });
 
     return () => subscription.unsubscribe();

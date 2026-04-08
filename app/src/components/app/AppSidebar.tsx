@@ -264,11 +264,13 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
               className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 transition-colors hover:bg-cream-dark/50"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#5B8DEF] text-xs font-bold text-white">
-                {profile?.first_name?.[0]?.toUpperCase() || "?"}
+                {profile?.first_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "?"}
               </div>
               <div className="min-w-0 flex-1 text-left">
                 <p className="truncate text-sm font-medium">
-                  {profile ? `${profile.first_name} ${profile.last_name?.[0] || ""}.` : "Loading..."}
+                  {profile
+                    ? `${profile.first_name} ${profile.last_name?.[0] || ""}.`
+                    : user?.email ?? "Account"}
                 </p>
                 <p className="text-[11px] text-ink-muted">Free Plan</p>
               </div>
