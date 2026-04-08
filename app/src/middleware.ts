@@ -2,18 +2,18 @@ import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request);
+  const { supabaseResponse, hasAuthCookie } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
   // Unauthenticated users can't access /app or /onboarding
-  if (!user && (pathname.startsWith("/app") || pathname.startsWith("/onboarding"))) {
+  if (!hasAuthCookie && (pathname.startsWith("/app") || pathname.startsWith("/onboarding"))) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
   // Authenticated users on /login get redirected to /app
-  if (user && pathname === "/login") {
+  if (hasAuthCookie && pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     return NextResponse.redirect(url);
