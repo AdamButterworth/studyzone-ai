@@ -41,9 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Try getSession first (reads from cookie, no network call)
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (sessionError) {
-          console.error("Auth getSession error:", sessionError);
-        }
+        console.log("[Auth] session:", !!session, "user:", session?.user?.id, "error:", sessionError);
 
         const currentUser = session?.user ?? null;
         setUser(currentUser);
