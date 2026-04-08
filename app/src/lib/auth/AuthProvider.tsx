@@ -33,7 +33,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const supabase = createClient();
+
+  let supabase: ReturnType<typeof createClient>;
+  try {
+    supabase = createClient();
+  } catch (e) {
+    console.error("[AuthProvider] createClient failed:", e);
+    return <>{children}</>;
+  }
+
+  if (typeof window !== "undefined") {
+    console.log("[AuthProvider] rendered, supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30));
+  }
 
   useEffect(() => {
     const init = async () => {
