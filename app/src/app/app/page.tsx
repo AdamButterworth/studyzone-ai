@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, Link, ClipboardPaste, Plus, Clock, ArrowRight, Search } from "lucide-react";
+import { Upload, Link, ClipboardPaste, Plus, Clock, ArrowRight, Search, MoreHorizontal, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 
@@ -39,6 +39,7 @@ export default function AppDashboard() {
   const [recents, setRecents] = useState<RecentDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const fetchedFor = useRef<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
@@ -106,6 +107,25 @@ export default function AppDashboard() {
 
     fetchData();
   }, [user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    const close = () => setMenuOpenId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [menuOpenId]);
+
+  const handleDeleteSubject = async (subjectId: string) => {
+    setMenuOpenId(null);
+    const { error } = await supabase
+      .from("subjects")
+      .delete()
+      .eq("id", subjectId);
+
+    if (!error) {
+      setSubjects((prev) => prev.filter((s) => s.id !== subjectId));
+    }
+  };
 
   const handleCreateSubject = async () => {
     if (!user) return;
@@ -189,8 +209,34 @@ export default function AppDashboard() {
             <a
               key={subject.id}
               href={`/app/subject/${subject.id}`}
-              className="flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
+              className="group relative flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
             >
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenuOpenId(menuOpenId === subject.id ? null : subject.id);
+                }}
+                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg text-ink-muted/0 transition-colors hover:bg-black/5 hover:text-ink-muted group-hover:text-ink-muted/50"
+              >
+                <MoreHorizontal size={14} />
+              </button>
+
+              {menuOpenId === subject.id && (
+                <div
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  className="absolute right-2 top-10 z-10 min-w-[120px] rounded-xl border border-black/8 bg-white py-1 shadow-lg"
+                >
+                  <button
+                    onClick={() => handleDeleteSubject(subject.id)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-50"
+                  >
+                    <Trash2 size={13} />
+                    Delete
+                  </button>
+                </div>
+              )}
+
               <span className="text-xl">{subject.icon}</span>
               <h3 className="mt-3 text-[13px] font-app-heading">
                 {subject.name}
