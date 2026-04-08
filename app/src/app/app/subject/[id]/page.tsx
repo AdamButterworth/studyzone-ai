@@ -50,7 +50,7 @@ function timeAgo(date: string): string {
 export default function SubjectPage() {
   const params = useParams();
   const id = params.id as string;
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [subjectName, setSubjectName] = useState("Untitled Subject");
@@ -74,7 +74,7 @@ export default function SubjectPage() {
 
   /* Load subject + documents from DB */
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
 
     const fetchSubject = async () => {
       const { data: subjectData } = await supabase
@@ -112,7 +112,7 @@ export default function SubjectPage() {
     };
 
     fetchSubject();
-  }, [user, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Auto-save subject name/description (debounced) */
   const saveSubject = useCallback(

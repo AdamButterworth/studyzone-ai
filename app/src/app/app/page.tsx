@@ -38,12 +38,16 @@ export default function AppDashboard() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [recents, setRecents] = useState<RecentDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
   const router = useRouter();
 
   useEffect(() => {
-    if (!user) return;
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const fetchData = async () => {
       // Fetch subjects with document counts
@@ -92,7 +96,7 @@ export default function AppDashboard() {
     };
 
     fetchData();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreateSubject = async () => {
     if (!user) return;

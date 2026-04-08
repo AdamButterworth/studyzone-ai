@@ -42,13 +42,13 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   const [subjects, setSubjects] = useState<SidebarSubject[]>([]);
   const [recentDocs, setRecentDocs] = useState<RecentDoc[]>([]);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const supabase = createClient();
   const router = useRouter();
 
   // Fetch subjects and recents
   useEffect(() => {
-    if (!user) return;
+    if (authLoading || !user) return;
 
     const fetchSidebar = async () => {
       const { data: subjectsData } = await supabase
@@ -83,7 +83,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
     };
 
     fetchSidebar();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close user menu on outside click
   useEffect(() => {
