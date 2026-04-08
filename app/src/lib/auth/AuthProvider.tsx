@@ -53,9 +53,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .eq("id", currentUser.id)
             .single();
 
-          if (profileError) {
-            console.error("Profile fetch error:", profileError);
-          } else {
+          console.log("[Auth] profile:", data, "error:", profileError);
+
+          if (!profileError && data) {
             setProfile(data);
           }
         }
@@ -71,6 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // Only handle actual sign-in/sign-out, not the initial session
+      if (_event === "INITIAL_SESSION") return;
+
       const currentUser = session?.user ?? null;
       setUser(currentUser);
 
@@ -80,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .select("*")
           .eq("id", currentUser.id)
           .single();
-        setProfile(data);
+        if (data) setProfile(data);
       } else {
         setProfile(null);
       }
