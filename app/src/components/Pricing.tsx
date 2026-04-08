@@ -78,7 +78,7 @@ export default function Pricing() {
                 </span>
               </div>
 
-              <a href="#" className={`mt-6 inline-block ${plan.ctaStyle}`}>
+              <a href="/login" className={`mt-6 inline-block ${plan.ctaStyle}`}>
                 {plan.cta}
               </a>
 
