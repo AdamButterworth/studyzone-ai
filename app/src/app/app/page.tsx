@@ -50,49 +50,47 @@ export default function AppDashboard() {
     }
 
     const fetchData = async () => {
-      // Fetch subjects with document counts
-      const { data: subjectsData } = await supabase
-        .from("subjects")
-        .select("id, name, icon, description, updated_at")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false });
+      try {
+        // Fetch subjects
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from("subjects")
+          .select("id, name, icon, description, updated_at")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false });
 
-      if (subjectsData) {
-        // Get document counts for each subject
-        const withCounts = await Promise.all(
-          subjectsData.map(async (s) => {
-            const { count } = await supabase
-              .from("documents")
-              .select("*", { count: "exact", head: true })
-              .eq("subject_id", s.id);
-            return { ...s, document_count: count || 0 };
-          })
-        );
-        setSubjects(withCounts);
+        if (subjectsError) {
+          console.error("Subjects fetch error:", subjectsError);
+        } else if (subjectsData) {
+          setSubjects(subjectsData.map((s) => ({ ...s, document_count: 0 })));
+        }
+
+        // Fetch recent documents
+        const { data: recentsData, error: recentsError } = await supabase
+          .from("documents")
+          .select("id, title, type, subject_id")
+          .eq("user_id", user.id)
+          .not("last_viewed_at", "is", null)
+          .order("last_viewed_at", { ascending: false })
+          .limit(5);
+
+        if (recentsError) {
+          console.error("Recents fetch error:", recentsError);
+        } else if (recentsData) {
+          setRecents(
+            recentsData.map((d: any) => ({
+              id: d.id,
+              title: d.title,
+              type: d.type,
+              subject_id: d.subject_id,
+              subject_name: "",
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+      } finally {
+        setLoading(false);
       }
-
-      // Fetch recent documents
-      const { data: recentsData } = await supabase
-        .from("documents")
-        .select("id, title, type, subject_id, subjects(name)")
-        .eq("user_id", user.id)
-        .not("last_viewed_at", "is", null)
-        .order("last_viewed_at", { ascending: false })
-        .limit(5);
-
-      if (recentsData) {
-        setRecents(
-          recentsData.map((d: any) => ({
-            id: d.id,
-            title: d.title,
-            type: d.type,
-            subject_id: d.subject_id,
-            subject_name: d.subjects?.name || "",
-          }))
-        );
-      }
-
-      setLoading(false);
     };
 
     fetchData();
