@@ -554,7 +554,7 @@ export default function DocumentPage() {
         <div className="flex shrink-0 items-center justify-between bg-white/80 px-5 py-2.5 backdrop-blur-sm">
           <div className="flex items-center gap-2 text-[13px]">
             <a
-              href={`/app/subject/${doc.subjectSlug}`}
+              href={`/subject/${doc.subjectSlug}`}
               className="flex items-center gap-1.5 font-app text-ink-muted transition-colors hover:text-ink"
             >
               <ArrowLeft size={14} />

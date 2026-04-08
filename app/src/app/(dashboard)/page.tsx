@@ -136,7 +136,7 @@ export default function AppDashboard() {
       .single();
 
     if (data && !error) {
-      router.push(`/app/subject/${data.id}`);
+      router.push(`/subject/${data.id}`);
     }
   };
 
@@ -208,7 +208,7 @@ export default function AppDashboard() {
           {subjects.map((subject) => (
             <a
               key={subject.id}
-              href={`/app/subject/${subject.id}`}
+              href={`/subject/${subject.id}`}
               className="group relative flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
             >
               <button
@@ -293,7 +293,7 @@ export default function AppDashboard() {
           {recents.map((item) => (
             <a
               key={item.id}
-              href={`/app/subject/${item.subject_id}/doc/${item.id}`}
+              href={`/subject/${item.subject_id}/doc/${item.id}`}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white"
             >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cream-dark/50 text-[10px] font-medium text-ink-muted">

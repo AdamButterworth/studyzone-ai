@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-cream: #FDF6EE;
+  --color-cream-dark: #F5EDE3;
+  --color-ink: #1A1A1A;
+  --color-ink-light: #6B6B6B;
+  --color-ink-muted: #9B9B9B;
+  --color-lavender: #E0D6F6;
+  --color-lavender-light: #EDE6FB;
+  --color-sky: #D6E6F6;
+  --color-sky-light: #E8F1FB;
+  --color-mint: #C8E6D4;
+  --color-mint-light: #DFF0E7;
+  --color-peach: #F6DDD6;
+  --color-peach-light: #FBF0EC;
+  --color-amber: #F6EDD6;
+  --color-amber-light: #FBF6E8;
+  --font-serif: var(--font-playfair);
+  --font-sans: var(--font-dm-sans);
+  --font-app: var(--font-inter);
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif), Georgia, serif;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Glass effect for navbar */
+.glass {
+  background: rgba(253, 246, 238, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* App UI font — matches Craft's Inter styling */
+.font-app {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "calt", "lnum";
+  font-variant-numeric: lining-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+}
+
+/* App heading — 22px/600 like Craft's titles */
+.font-app-heading {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "lnum", "calt";
+  font-variant-numeric: lining-nums;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App sidebar text — 13px/400 like Craft's sidebar */
+.font-app-sidebar {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "calt", "lnum";
+  font-variant-numeric: lining-nums;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.04px;
+  line-height: 16px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+}

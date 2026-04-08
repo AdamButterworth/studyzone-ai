@@ -21,8 +21,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "StudyZone AI",
-  description: "Your AI-powered study workspace.",
+  title: "StudyZone AI — Your AI Tutor That Teaches, Not Just Summarizes",
+  description:
+    "Upload your notes, slides, and papers. StudyZone builds a learning path from first principles — so you actually understand.",
   icons: {
     icon: "/icon.svg",
   },

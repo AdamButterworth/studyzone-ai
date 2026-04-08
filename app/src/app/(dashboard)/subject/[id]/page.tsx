@@ -368,7 +368,7 @@ export default function SubjectPage() {
               {content.map((item) => (
                 <a
                   key={item.id}
-                  href={`/app/subject/${id}/doc/${item.id}`}
+                  href={`/subject/${id}/doc/${item.id}`}
                   className="group flex items-center gap-4 border-b border-black/[0.03] px-3 py-3 transition-colors hover:bg-white/60"
                 >
                   {/* Thumbnail */}

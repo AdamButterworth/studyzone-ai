@@ -118,7 +118,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
       .single();
 
     if (data && !error) {
-      router.push(`/app/subject/${data.id}`);
+      router.push(`/subject/${data.id}`);
     }
   };
 
@@ -127,7 +127,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
       <div className="flex w-[280px] flex-col h-full">
         {/* Header */}
         <div className="flex h-14 items-center justify-between px-4">
-          <a href="/app" className="flex items-center gap-2">
+          <a href="/" className="flex items-center gap-2">
             <img src="/icon.svg" alt="StudyZone AI" className="h-6 w-6" />
             <span className="text-sm font-semibold tracking-tight font-app-heading">
               StudyZone AI
@@ -188,7 +188,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
               recentDocs.map((doc) => (
                 <a
                   key={doc.id}
-                  href={`/app/subject/${doc.subject_id}/doc/${doc.id}`}
+                  href={`/subject/${doc.subject_id}/doc/${doc.id}`}
                   className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
                 >
                   <div className="h-1 w-1 shrink-0 rounded-full bg-ink-muted/40" />
@@ -233,7 +233,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
               subjects.map((subject) => (
                 <a
                   key={subject.id}
-                  href={`/app/subject/${subject.id}`}
+                  href={`/subject/${subject.id}`}
                   className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
                 >
                   <div className="flex items-center gap-2 truncate">

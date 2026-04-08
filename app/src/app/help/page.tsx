@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import PageHeader from "@/components/PageHeader";
 import {
   Upload,
@@ -111,9 +109,7 @@ export default function HelpPage() {
   };
 
   return (
-    <>
-      <Navbar />
-      <main className="mx-auto max-w-4xl px-6 pb-20">
+    <main className="mx-auto max-w-4xl px-6 pb-20">
         <PageHeader
           title="Help Center"
           subtitle="Find answers to common questions or get in touch with our team."
@@ -264,8 +260,6 @@ export default function HelpPage() {
             )}
           </div>
         </section>
-      </main>
-      <Footer />
-    </>
+    </main>
   );
 }

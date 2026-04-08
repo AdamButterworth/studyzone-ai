@@ -1,21 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
+const PUBLIC_PATHS = ["/login", "/onboarding", "/privacy", "/terms", "/help"];
+
 export async function middleware(request: NextRequest) {
   const { supabaseResponse, isAuthenticated } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  // Unauthenticated users can't access /app or /onboarding
-  if (!isAuthenticated && (pathname.startsWith("/app") || pathname.startsWith("/onboarding"))) {
+  const isPublicPath = PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+
+  // Unauthenticated users can only access public paths
+  if (!isAuthenticated && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  // Authenticated users on /login get redirected to /app
+  // Authenticated users on /login get redirected to dashboard
   if (isAuthenticated && pathname === "/login") {
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
+    url.pathname = "/";
     return NextResponse.redirect(url);
   }
 

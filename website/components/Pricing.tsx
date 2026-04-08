@@ -78,7 +78,7 @@ export default function Pricing() {
                 </span>
               </div>
 
-              <a href="/login" className={`mt-6 inline-block ${plan.ctaStyle}`}>
+              <a href="https://app.studyzoneai.com/login" className={`mt-6 inline-block ${plan.ctaStyle}`}>
                 {plan.cta}
               </a>
 

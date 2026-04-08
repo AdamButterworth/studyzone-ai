@@ -21,7 +21,7 @@ export default function CTA() {
 
             <div className="mt-8 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
               <a
-                href="/login"
+                href="https://app.studyzoneai.com/login"
                 className="inline-flex items-center gap-2 rounded-full bg-ink px-7 py-3.5 text-sm font-medium text-white transition-colors hover:bg-ink/80"
               >
                 Get Started Free

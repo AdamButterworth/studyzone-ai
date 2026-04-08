@@ -1,5 +1,3 @@
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
 import PageHeader from "@/components/PageHeader";
 
 export const metadata = {
@@ -9,9 +7,7 @@ export const metadata = {
 
 export default function PrivacyPage() {
   return (
-    <>
-      <Navbar />
-      <main className="mx-auto max-w-3xl px-6 pb-20">
+    <main className="mx-auto max-w-3xl px-6 pb-20">
         <PageHeader title="Privacy Policy" />
 
         <div className="prose-sm space-y-8 text-ink-light leading-relaxed">
@@ -166,8 +162,6 @@ export default function PrivacyPage() {
             </p>
           </section>
         </div>
-      </main>
-      <Footer />
-    </>
+    </main>
   );
 }

@@ -42,13 +42,13 @@ export default function Navbar() {
           {/* Desktop CTAs */}
           <div className="hidden items-center gap-3 md:flex">
             <a
-              href="/login"
+              href="https://app.studyzoneai.com/login"
               className="text-sm text-ink-light transition-colors hover:text-ink"
             >
               Log in
             </a>
             <a
-              href="/login"
+              href="https://app.studyzoneai.com/login"
               className="rounded-full bg-ink px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/80"
             >
               Get Started
@@ -80,11 +80,11 @@ export default function Navbar() {
                 </a>
               ))}
               <hr className="border-black/5" />
-              <a href="/login" className="text-sm text-ink-light">
+              <a href="https://app.studyzoneai.com/login" className="text-sm text-ink-light">
                 Log in
               </a>
               <a
-                href="/login"
+                href="https://app.studyzoneai.com/login"
                 className="rounded-full bg-ink px-5 py-2.5 text-center text-sm font-medium text-white"
               >
                 Get Started

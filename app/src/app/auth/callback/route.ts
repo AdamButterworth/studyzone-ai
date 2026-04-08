@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
         if (profile) {
           // Returning user — go to app
-          return NextResponse.redirect(`${origin}/app`);
+          return NextResponse.redirect(`${origin}/`);
         } else {
           // New user — go to onboarding
           return NextResponse.redirect(`${origin}/onboarding`);
