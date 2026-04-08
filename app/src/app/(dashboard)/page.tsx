@@ -136,6 +136,7 @@ export default function AppDashboard() {
       .single();
 
     if (data && !error) {
+      window.dispatchEvent(new CustomEvent("subject-created", { detail: data }));
       router.push(`/subject/${data.id}`);
     }
   };

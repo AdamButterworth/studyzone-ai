@@ -109,6 +109,18 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [userMenuOpen]);
 
+  // Listen for subjects created elsewhere (e.g. dashboard)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        setSubjects((prev) => [{ id: detail.id, name: detail.name, icon: detail.icon || "📚", document_count: 0 }, ...prev]);
+      }
+    };
+    window.addEventListener("subject-created", handler);
+    return () => window.removeEventListener("subject-created", handler);
+  }, []);
+
   const handleCreateSubject = async () => {
     if (!user) return;
     const { data, error } = await supabase
@@ -118,6 +130,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
       .single();
 
     if (data && !error) {
+      setSubjects((prev) => [{ id: data.id, name: data.name, icon: data.icon || "📚", document_count: 0 }, ...prev]);
       router.push(`/subject/${data.id}`);
     }
   };
