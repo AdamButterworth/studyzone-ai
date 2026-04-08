@@ -109,16 +109,26 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [userMenuOpen]);
 
-  // Listen for subjects created elsewhere (e.g. dashboard)
+  // Listen for subject changes from other components
   useEffect(() => {
-    const handler = (e: Event) => {
+    const onCreated = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       if (detail) {
         setSubjects((prev) => [{ id: detail.id, name: detail.name, icon: detail.icon || "📚", document_count: 0 }, ...prev]);
       }
     };
-    window.addEventListener("subject-created", handler);
-    return () => window.removeEventListener("subject-created", handler);
+    const onUpdated = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail) {
+        setSubjects((prev) => prev.map((s) => s.id === detail.id ? { ...s, name: detail.name } : s));
+      }
+    };
+    window.addEventListener("subject-created", onCreated);
+    window.addEventListener("subject-updated", onUpdated);
+    return () => {
+      window.removeEventListener("subject-created", onCreated);
+      window.removeEventListener("subject-updated", onUpdated);
+    };
   }, []);
 
   const handleCreateSubject = async () => {

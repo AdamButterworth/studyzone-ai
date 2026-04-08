@@ -123,6 +123,7 @@ export default function SubjectPage() {
           .from("subjects")
           .update({ name, description: desc, updated_at: new Date().toISOString() })
           .eq("id", id);
+        window.dispatchEvent(new CustomEvent("subject-updated", { detail: { id, name } }));
       }, 800);
     },
     [id, supabase]
