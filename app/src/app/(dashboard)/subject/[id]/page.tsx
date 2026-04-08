@@ -56,9 +56,10 @@ export default function SubjectPage() {
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
 
-  const [subjectName, setSubjectName] = useState("Untitled Subject");
+  const [subjectName, setSubjectName] = useState("");
   const [subjectDesc, setSubjectDesc] = useState("");
-  const [subjectIcon, setSubjectIcon] = useState("\u{1F4DA}");
+  const [subjectIcon, setSubjectIcon] = useState("");
+  const [subjectMetaLoading, setSubjectMetaLoading] = useState(true);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasMore, setHasMore] = useState(false);
@@ -91,6 +92,15 @@ export default function SubjectPage() {
   useEffect(() => {
     if (authLoading || !user) return;
 
+    // Reset states on id change to prevent stale/flash
+    setSubjectName("");
+    setSubjectDesc("");
+    setSubjectIcon("");
+    setSubjectMetaLoading(true);
+    setContent([]);
+    setLoading(true);
+    setHasMore(false);
+
     const fetchData = async () => {
       const [subjectResult, docsResult] = await Promise.all([
         supabase
@@ -110,7 +120,12 @@ export default function SubjectPage() {
         setSubjectName(subjectResult.data.name);
         setSubjectDesc(subjectResult.data.description || "");
         setSubjectIcon(subjectResult.data.icon || "\u{1F4DA}");
+      } else {
+        // No row found — use defaults only as true fallback
+        setSubjectName("Untitled Subject");
+        setSubjectIcon("\u{1F4DA}");
       }
+      setSubjectMetaLoading(false);
 
       if (docsResult.data) {
         setContent(mapDocs(docsResult.data));
@@ -228,31 +243,43 @@ export default function SubjectPage() {
       {/* ─── Header ─── */}
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">{subjectIcon}</span>
-            <div className="flex items-baseline gap-2">
+          {subjectMetaLoading ? (
+            <div className="animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <div className="h-6 w-6 rounded bg-cream-dark" />
+                <div className="h-7 w-48 rounded-lg bg-cream-dark" />
+              </div>
+              <div className="mt-2 ml-[30px] h-4 w-64 rounded bg-cream-dark" />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2.5">
+                <span className="text-xl">{subjectIcon}</span>
+                <div className="flex items-baseline gap-2">
+                  <input
+                    type="text"
+                    value={subjectName}
+                    onChange={(e) => handleNameChange(e.target.value)}
+                    placeholder="Untitled Subject"
+                    className="font-app-heading text-[22px] tracking-tight bg-transparent outline-none rounded-lg px-2 -mx-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 w-auto transition-colors"
+                    style={{ width: `${Math.max(subjectName.length + 2, 10)}ch` }}
+                  />
+                  {content.length > 0 && (
+                    <span className="text-[15px] font-normal text-ink-muted">
+                      ({content.length}{hasMore ? "+" : ""})
+                    </span>
+                  )}
+                </div>
+              </div>
               <input
                 type="text"
-                value={subjectName}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Untitled Subject"
-                className="font-app-heading text-[22px] tracking-tight bg-transparent outline-none rounded-lg px-2 -mx-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 w-auto transition-colors"
-                style={{ width: `${Math.max(subjectName.length + 2, 10)}ch` }}
+                value={subjectDesc}
+                onChange={(e) => handleDescChange(e.target.value)}
+                placeholder="Add a description..."
+                className="mt-1 ml-[30px] font-app text-[13px] text-ink-muted bg-transparent outline-none rounded-lg px-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 placeholder:italic w-full transition-colors"
               />
-              {content.length > 0 && (
-                <span className="text-[15px] font-normal text-ink-muted">
-                  ({content.length}{hasMore ? "+" : ""})
-                </span>
-              )}
-            </div>
-          </div>
-          <input
-            type="text"
-            value={subjectDesc}
-            onChange={(e) => handleDescChange(e.target.value)}
-            placeholder="Add a description..."
-            className="mt-1 ml-[30px] font-app text-[13px] text-ink-muted bg-transparent outline-none rounded-lg px-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 placeholder:italic w-full transition-colors"
-          />
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
