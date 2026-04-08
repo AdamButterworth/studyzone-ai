@@ -18,6 +18,7 @@
   --color-amber-light: #FBF6E8;
   --font-serif: var(--font-playfair);
   --font-sans: var(--font-dm-sans);
+  --font-app: var(--font-inter);
 }
 
 body {
@@ -40,4 +41,35 @@ html {
   background: rgba(253, 246, 238, 0.72);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+/* App UI font — matches Craft's Inter styling */
+.font-app {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "calt", "lnum";
+  font-variant-numeric: lining-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
+}
+
+/* App heading — 22px/600 like Craft's titles */
+.font-app-heading {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "lnum", "calt";
+  font-variant-numeric: lining-nums;
+  font-weight: 600;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App sidebar text — 13px/400 like Craft's sidebar */
+.font-app-sidebar {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "calt", "lnum";
+  font-variant-numeric: lining-nums;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.04px;
+  line-height: 16px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizelegibility;
 }

@@ -30,7 +30,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Desktop: inline, animated width */}
       <div
         className={`hidden md:block shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
-          sidebarOpen ? "w-64" : "w-0"
+          sidebarOpen ? "w-[280px]" : "w-0"
         }`}
       >
         <AppSidebar open onToggle={() => setSidebarOpen(false)} />

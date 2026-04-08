@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Playfair_Display, DM_Sans } from "next/font/google";
+import { Playfair_Display, DM_Sans, Inter } from "next/font/google";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -10,6 +10,12 @@ const playfair = Playfair_Display({
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
 });
@@ -30,7 +36,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${playfair.variable} ${dmSans.variable} antialiased`}>
+      <body className={`${playfair.variable} ${dmSans.variable} ${inter.variable} antialiased`}>
         {children}
       </body>
     </html>

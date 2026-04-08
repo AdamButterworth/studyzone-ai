@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import {
   Plus,
   Search,
   Clock,
   BookOpen,
   ChevronRight,
+  ChevronDown,
   Settings,
   HelpCircle,
   ChevronsLeft,
@@ -22,21 +24,24 @@ const recentDocs = [
   { name: "Amino Acids Overview", path: "Organic Chemistry" },
 ];
 
-const learningPaths = [
+const subjects = [
   { name: "Reinforcement Learning", icon: "🧠", count: 3 },
   { name: "Organic Chemistry", icon: "🧪", count: 5 },
   { name: "Constitutional Law", icon: "⚖️", count: 2 },
 ];
 
 export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
+  const [recentsOpen, setRecentsOpen] = useState(true);
+  const [subjectsOpen, setSubjectsOpen] = useState(true);
+
   return (
-    <aside className="relative flex h-full w-64 flex-col border-r border-black/5 bg-white">
-      <div className="flex w-64 flex-col h-full">
+    <aside className="font-app-sidebar relative flex h-full w-[280px] flex-col border-r border-black/5 bg-white">
+      <div className="flex w-[280px] flex-col h-full">
         {/* Header */}
         <div className="flex h-14 items-center justify-between px-4">
           <a href="/app" className="flex items-center gap-2">
             <img src="/icon.svg" alt="StudyZone AI" className="h-6 w-6" />
-            <span className="text-sm font-semibold tracking-tight font-[family-name:var(--font-dm-sans)]">
+            <span className="text-sm font-semibold tracking-tight font-app-heading">
               StudyZone AI
             </span>
           </a>
@@ -48,17 +53,17 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
           </button>
         </div>
 
-        {/* New path button */}
+        {/* New subject button */}
         <div className="px-3 pb-2">
-          <button className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-light transition-colors hover:bg-cream-dark/50">
-            <Plus size={16} />
+          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50">
+            <Plus size={15} />
             New Subject
           </button>
         </div>
 
         {/* Search */}
         <div className="px-3 pb-3">
-          <button className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-cream-dark/50">
+          <button className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50">
             <Search size={14} />
             Search
           </button>
@@ -66,50 +71,83 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-3">
-          {/* Recents */}
-          <div className="mb-4">
-            <div className="mb-1 flex items-center gap-1.5 px-3 py-1">
-              <Clock size={12} className="text-ink-muted" />
-              <span className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
-                Recents
-              </span>
-            </div>
-            {recentDocs.map((doc) => (
-              <a
-                key={doc.name}
-                href="#"
-                className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-ink-light transition-colors hover:bg-cream-dark/50"
-              >
-                <div className="h-1 w-1 shrink-0 rounded-full bg-ink-muted/40" />
-                <span className="truncate">{doc.name}</span>
-              </a>
-            ))}
+          {/* Recents — collapsible */}
+          <div className="mb-2">
+            <button
+              onClick={() => setRecentsOpen(!recentsOpen)}
+              className="mb-0.5 flex w-full items-center justify-between rounded-lg px-3 py-1.5 transition-colors hover:bg-cream-dark/50"
+            >
+              <div className="flex items-center gap-1.5">
+                <Clock size={12} className="text-ink-muted" />
+                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  Recents
+                </span>
+              </div>
+              <ChevronDown
+                size={12}
+                className={`text-ink-muted transition-transform ${recentsOpen ? "" : "-rotate-90"}`}
+              />
+            </button>
+            {recentsOpen &&
+              recentDocs.map((doc) => (
+                <a
+                  key={doc.name}
+                  href="#"
+                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
+                >
+                  <div className="h-1 w-1 shrink-0 rounded-full bg-ink-muted/40" />
+                  <span className="truncate">{doc.name}</span>
+                </a>
+              ))}
           </div>
 
-          {/* Subjects */}
-          <div className="mb-4">
-            <div className="mb-1 flex items-center gap-1.5 px-3 py-1">
-              <BookOpen size={12} className="text-ink-muted" />
-              <span className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
-                Subjects
-              </span>
-            </div>
-            {learningPaths.map((path) => (
-              <a
-                key={path.name}
-                href="#"
-                className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-sm text-ink-light transition-colors hover:bg-cream-dark/50"
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <span className="text-xs">{path.icon}</span>
-                  <span className="truncate">{path.name}</span>
-                </div>
-                <ChevronRight
-                  size={14}
-                  className="shrink-0 text-ink-muted/40 transition-colors group-hover:text-ink-muted"
+          {/* Subjects — collapsible */}
+          <div className="mb-2">
+            <button
+              onClick={() => setSubjectsOpen(!subjectsOpen)}
+              className="mb-0.5 flex w-full items-center justify-between rounded-lg px-3 py-1.5 transition-colors hover:bg-cream-dark/50"
+            >
+              <div className="flex items-center gap-1.5">
+                <BookOpen size={12} className="text-ink-muted" />
+                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  Subjects
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <Plus
+                  size={12}
+                  className="text-ink-muted transition-colors hover:text-ink"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Create new subject
+                  }}
                 />
-              </a>
-            ))}
+                <ChevronDown
+                  size={12}
+                  className={`text-ink-muted transition-transform ${subjectsOpen ? "" : "-rotate-90"}`}
+                />
+              </div>
+            </button>
+            {subjectsOpen &&
+              subjects.map((subject) => (
+                <a
+                  key={subject.name}
+                  href="#"
+                  className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="text-xs">{subject.icon}</span>
+                    <span className="truncate">{subject.name}</span>
+                  </div>
+                  <span className="text-[11px] text-ink-muted/50 group-hover:hidden">
+                    {subject.count}
+                  </span>
+                  <ChevronRight
+                    size={14}
+                    className="hidden shrink-0 text-ink-muted/40 group-hover:block"
+                  />
+                </a>
+              ))}
           </div>
         </div>
 
@@ -117,14 +155,14 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
         <div className="border-t border-black/5 px-3 py-3">
           <a
             href="/help"
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink-light"
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink/85"
           >
             <HelpCircle size={14} />
             Help & Feedback
           </a>
           <a
             href="#"
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink-light"
+            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink/85"
           >
             <Settings size={14} />
             Settings

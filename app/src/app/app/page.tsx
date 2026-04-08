@@ -20,10 +20,10 @@ export default function AppDashboard() {
     <div className="mx-auto max-w-3xl pt-8 md:pt-16">
       {/* Hero — what do you want to learn */}
       <div className="text-center">
-        <h1 className="text-3xl tracking-tight md:text-4xl">
+        <h1 className="font-app-heading text-[26px] tracking-tight md:text-[32px]">
           What do you want to learn?
         </h1>
-        <p className="mt-2 text-ink-light">
+        <p className="mt-2 text-sm text-ink-light">
           Start a new subject or pick up where you left off.
         </p>
       </div>
@@ -35,7 +35,7 @@ export default function AppDashboard() {
           <input
             type="text"
             placeholder="I want to learn about Proximal Policy Optimization..."
-            className="w-full bg-transparent text-base outline-none placeholder:text-ink-muted"
+            className="font-app w-full bg-transparent text-sm outline-none placeholder:text-ink-muted"
           />
           <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink text-white transition-colors hover:bg-ink/80">
             <ArrowRight size={16} />
@@ -63,7 +63,7 @@ export default function AppDashboard() {
       {/* Subjects */}
       <div className="mt-14">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold font-[family-name:var(--font-dm-sans)]">
+          <h2 className="text-[17px] font-app-heading">
             Your Subjects
           </h2>
           <button className="flex items-center gap-1 text-sm text-ink-muted transition-colors hover:text-ink">
@@ -84,10 +84,10 @@ export default function AppDashboard() {
             <a
               key={subject.name}
               href="#"
-              className="group flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:border-black/10 hover:shadow-sm"
+              className="flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
             >
               <span className="text-xl">{subject.icon}</span>
-              <h3 className="mt-3 text-sm font-semibold font-[family-name:var(--font-dm-sans)] group-hover:underline">
+              <h3 className="mt-3 text-[13px] font-app-heading">
                 {subject.name}
               </h3>
               <span className="mt-1 text-xs text-ink-muted">
@@ -104,7 +104,7 @@ export default function AppDashboard() {
       {/* Recents */}
       <div className="mt-14 pb-10">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold font-[family-name:var(--font-dm-sans)]">
+          <h2 className="text-[17px] font-app-heading">
             Recents
           </h2>
           <button className="text-sm text-ink-muted transition-colors hover:text-ink">
