@@ -37,10 +37,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
   useEffect(() => {
+    console.log("[Auth] useEffect fired");
+
     const init = async () => {
+      console.log("[Auth] init called");
       try {
-        // Try getSession first (reads from cookie, no network call)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log("[Auth] calling getSession...");
+        const result = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("getSession timeout")), 5000))
+        ]) as any;
+
+        const session = result?.data?.session;
+        const sessionError = result?.error;
 
         console.log("[Auth] session:", !!session, "user:", session?.user?.id, "error:", sessionError);
 
