@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Plus,
   Search,
@@ -14,31 +15,77 @@ import {
   LogOut,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { createClient } from "@/lib/supabase/client";
 
 interface AppSidebarProps {
   open: boolean;
   onToggle: () => void;
 }
 
-const recentDocs = [
-  { name: "Policy Gradient Methods", path: "Reinforcement Learning" },
-  { name: "Bellman Equations", path: "Reinforcement Learning" },
-  { name: "Amino Acids Overview", path: "Organic Chemistry" },
-];
+interface SidebarSubject {
+  id: string;
+  name: string;
+  icon: string;
+  document_count: number;
+}
 
-const subjects = [
-  { name: "Reinforcement Learning", icon: "🧠", count: 3, slug: "rl" },
-  { name: "Organic Chemistry", icon: "🧪", count: 5, slug: "chem" },
-  { name: "Constitutional Law", icon: "⚖️", count: 2, slug: "law" },
-];
+interface RecentDoc {
+  id: string;
+  title: string;
+  subject_id: string;
+}
 
 export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [subjectsOpen, setSubjectsOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [subjects, setSubjects] = useState<SidebarSubject[]>([]);
+  const [recentDocs, setRecentDocs] = useState<RecentDoc[]>([]);
   const userMenuRef = useRef<HTMLDivElement>(null);
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
+  const supabase = createClient();
+  const router = useRouter();
 
+  // Fetch subjects and recents
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchSidebar = async () => {
+      const { data: subjectsData } = await supabase
+        .from("subjects")
+        .select("id, name, icon")
+        .eq("user_id", user.id)
+        .order("position")
+        .order("created_at", { ascending: false });
+
+      if (subjectsData) {
+        const withCounts = await Promise.all(
+          subjectsData.map(async (s) => {
+            const { count } = await supabase
+              .from("documents")
+              .select("*", { count: "exact", head: true })
+              .eq("subject_id", s.id);
+            return { ...s, document_count: count || 0 };
+          })
+        );
+        setSubjects(withCounts);
+      }
+
+      const { data: recentsData } = await supabase
+        .from("documents")
+        .select("id, title, subject_id")
+        .eq("user_id", user.id)
+        .not("last_viewed_at", "is", null)
+        .order("last_viewed_at", { ascending: false })
+        .limit(4);
+
+      if (recentsData) setRecentDocs(recentsData);
+    };
+
+    fetchSidebar();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close user menu on outside click
   useEffect(() => {
     if (!userMenuOpen) return;
     const handleClick = (e: MouseEvent) => {
@@ -49,6 +96,19 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [userMenuOpen]);
+
+  const handleCreateSubject = async () => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from("subjects")
+      .insert({ user_id: user.id, name: "Untitled Subject" })
+      .select()
+      .single();
+
+    if (data && !error) {
+      router.push(`/app/subject/${data.id}`);
+    }
+  };
 
   return (
     <aside className="font-app-sidebar relative flex h-full w-[280px] flex-col border-r border-black/5 bg-white">
@@ -71,10 +131,13 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
 
         {/* New subject button */}
         <div className="px-3 pb-2">
-          <a href="/app/subject/new" className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50">
+          <button
+            onClick={handleCreateSubject}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
+          >
             <Plus size={15} />
             New Subject
-          </a>
+          </button>
         </div>
 
         {/* Search */}
@@ -87,7 +150,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto px-3">
-          {/* Recents — collapsible */}
+          {/* Recents */}
           <div className="mb-2">
             <button
               onClick={() => setRecentsOpen(!recentsOpen)}
@@ -104,20 +167,25 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
                 className={`text-ink-muted transition-transform ${recentsOpen ? "" : "-rotate-90"}`}
               />
             </button>
+            {recentsOpen && recentDocs.length === 0 && (
+              <p className="px-3 py-1.5 text-[12px] text-ink-muted/50">
+                No recent documents
+              </p>
+            )}
             {recentsOpen &&
               recentDocs.map((doc) => (
                 <a
-                  key={doc.name}
-                  href="#"
+                  key={doc.id}
+                  href={`/app/subject/${doc.subject_id}/doc/${doc.id}`}
                   className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
                 >
                   <div className="h-1 w-1 shrink-0 rounded-full bg-ink-muted/40" />
-                  <span className="truncate">{doc.name}</span>
+                  <span className="truncate">{doc.title}</span>
                 </a>
               ))}
           </div>
 
-          {/* Subjects — collapsible */}
+          {/* Subjects */}
           <div className="mb-2">
             <button
               onClick={() => setSubjectsOpen(!subjectsOpen)}
@@ -135,7 +203,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
                   className="text-ink-muted transition-colors hover:text-ink"
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Create new subject
+                    handleCreateSubject();
                   }}
                 />
                 <ChevronDown
@@ -144,11 +212,16 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
                 />
               </div>
             </button>
+            {subjectsOpen && subjects.length === 0 && (
+              <p className="px-3 py-1.5 text-[12px] text-ink-muted/50">
+                No subjects yet
+              </p>
+            )}
             {subjectsOpen &&
               subjects.map((subject) => (
                 <a
-                  key={subject.name}
-                  href={`/app/subject/${subject.slug}`}
+                  key={subject.id}
+                  href={`/app/subject/${subject.id}`}
                   className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -156,7 +229,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
                     <span className="truncate">{subject.name}</span>
                   </div>
                   <span className="text-[11px] text-ink-muted/50 group-hover:hidden">
-                    {subject.count}
+                    {subject.document_count}
                   </span>
                   <ChevronRight
                     size={14}

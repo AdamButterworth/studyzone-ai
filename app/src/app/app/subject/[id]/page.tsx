@@ -20,8 +20,10 @@ import {
   ChevronDown,
   CloudUpload,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
-/* ─── Mock data ─── */
+/* ─── Types ─── */
 
 interface ContentItem {
   id: string;
@@ -32,80 +34,30 @@ interface ContentItem {
   lastViewed: string;
 }
 
-const MOCK_SUBJECTS: Record<
-  string,
-  { name: string; icon: string; description: string; content: ContentItem[] }
-> = {
-  rl: {
-    name: "Reinforcement Learning",
-    icon: "\u{1F9E0}",
-    description: "CS 224R course materials",
-    content: [
-      {
-        id: "1",
-        name: "Policy Gradient Methods",
-        type: "PDF",
-        preview:
-          "Key concepts of policy gradient algorithms including REINFORCE, advantage actor-critic...",
-        added: "2 hours ago",
-        lastViewed: "1 hour ago",
-      },
-      {
-        id: "2",
-        name: "Post-Training Methods",
-        type: "PDF",
-        preview:
-          "RLHF, DPO, and other post-training alignment techniques for large language models...",
-        added: "1 day ago",
-        lastViewed: "3 hours ago",
-      },
-      {
-        id: "3",
-        name: "Bellman Equations",
-        type: "TXT",
-        preview:
-          "Dynamic programming and the Bellman optimality equation for value functions...",
-        added: "3 days ago",
-        lastViewed: "1 day ago",
-      },
-      {
-        id: "4",
-        name: "Model-Based RL Survey",
-        type: "PDF",
-        preview:
-          "A survey of model-based reinforcement learning approaches including Dyna, MBPO, and world models...",
-        added: "5 days ago",
-        lastViewed: "2 days ago",
-      },
-      {
-        id: "5",
-        name: "Q-Learning & DQN",
-        type: "PDF",
-        preview:
-          "From tabular Q-learning to Deep Q-Networks, experience replay, and target networks...",
-        added: "1 week ago",
-        lastViewed: "4 days ago",
-      },
-    ],
-  },
-  new: {
-    name: "Untitled Subject",
-    icon: "\u{1F4DA}",
-    description: "",
-    content: [],
-  },
-};
+function timeAgo(date: string): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 /* ─── Component ─── */
 
 export default function SubjectPage() {
   const params = useParams();
   const id = params.id as string;
+  const { user } = useAuth();
+  const supabase = createClient();
 
-  const subject = MOCK_SUBJECTS[id] || MOCK_SUBJECTS["new"];
-  const [subjectName, setSubjectName] = useState(subject.name);
-  const [subjectDesc, setSubjectDesc] = useState(subject.description);
-  const [content, setContent] = useState<ContentItem[]>(subject.content);
+  const [subjectName, setSubjectName] = useState("Untitled Subject");
+  const [subjectDesc, setSubjectDesc] = useState("");
+  const [subjectIcon, setSubjectIcon] = useState("\u{1F4DA}");
+  const [content, setContent] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [pasteToast, setPasteToast] = useState<{
@@ -116,8 +68,75 @@ export default function SubjectPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isEmpty = content.length === 0;
+
+  /* Load subject + documents from DB */
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchSubject = async () => {
+      const { data: subjectData } = await supabase
+        .from("subjects")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (subjectData) {
+        setSubjectName(subjectData.name);
+        setSubjectDesc(subjectData.description || "");
+        setSubjectIcon(subjectData.icon || "\u{1F4DA}");
+      }
+
+      const { data: docs } = await supabase
+        .from("documents")
+        .select("*")
+        .eq("subject_id", id)
+        .order("created_at", { ascending: false });
+
+      if (docs) {
+        setContent(
+          docs.map((d: any) => ({
+            id: d.id,
+            name: d.title,
+            type: d.type.toUpperCase(),
+            preview: d.raw_text?.slice(0, 120) || "",
+            added: timeAgo(d.created_at),
+            lastViewed: d.last_viewed_at ? timeAgo(d.last_viewed_at) : "—",
+          }))
+        );
+      }
+
+      setLoading(false);
+    };
+
+    fetchSubject();
+  }, [user, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Auto-save subject name/description (debounced) */
+  const saveSubject = useCallback(
+    (name: string, desc: string) => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        await supabase
+          .from("subjects")
+          .update({ name, description: desc, updated_at: new Date().toISOString() })
+          .eq("id", id);
+      }, 800);
+    },
+    [id, supabase]
+  );
+
+  const handleNameChange = (val: string) => {
+    setSubjectName(val);
+    saveSubject(val, subjectDesc);
+  };
+
+  const handleDescChange = (val: string) => {
+    setSubjectDesc(val);
+    saveSubject(subjectName, val);
+  };
 
   /* Close dropdown on outside click */
   useEffect(() => {
@@ -184,12 +203,12 @@ export default function SubjectPage() {
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
-            <span className="text-xl">{subject.icon}</span>
+            <span className="text-xl">{subjectIcon}</span>
             <div className="flex items-baseline gap-2">
               <input
                 type="text"
                 value={subjectName}
-                onChange={(e) => setSubjectName(e.target.value)}
+                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Untitled Subject"
                 className="font-app-heading text-[22px] tracking-tight bg-transparent outline-none rounded-lg px-2 -mx-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 w-auto transition-colors"
                 style={{ width: `${Math.max(subjectName.length + 2, 10)}ch` }}
@@ -204,7 +223,7 @@ export default function SubjectPage() {
           <input
             type="text"
             value={subjectDesc}
-            onChange={(e) => setSubjectDesc(e.target.value)}
+            onChange={(e) => handleDescChange(e.target.value)}
             placeholder="Add a description..."
             className="mt-1 ml-[30px] font-app text-[13px] text-ink-muted bg-transparent outline-none rounded-lg px-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 placeholder:italic w-full transition-colors"
           />
