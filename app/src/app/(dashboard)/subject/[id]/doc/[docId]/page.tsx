@@ -380,6 +380,8 @@ export default function DocumentPage() {
   const [notes, setNotes] = useState("");
   const [homeQuery, setHomeQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingPage, setEditingPage] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState("");
   const [totalPages, setTotalPages] = useState(0);
   const [scrollToPage, setScrollToPage] = useState<number | undefined>();
   const [zoom, setZoom] = useState(1);
@@ -556,9 +558,42 @@ export default function DocumentPage() {
             >
               <ChevronLeft size={13} />
             </button>
-            <span className="font-app text-[12px] tabular-nums text-ink-light">
-              {totalPages > 0 ? `${currentPage} / ${totalPages}` : "—"}
-            </span>
+            {editingPage ? (
+              <span className="flex items-center gap-0.5 font-app text-[12px] tabular-nums text-ink-light">
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="numeric"
+                  value={pageInputValue}
+                  onChange={(e) => setPageInputValue(e.target.value.replace(/\D/g, ""))}
+                  onBlur={() => {
+                    const num = parseInt(pageInputValue, 10);
+                    if (num >= 1 && num <= totalPages) goToPage(num);
+                    setEditingPage(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const num = parseInt(pageInputValue, 10);
+                      if (num >= 1 && num <= totalPages) goToPage(num);
+                      setEditingPage(false);
+                    }
+                    if (e.key === "Escape") setEditingPage(false);
+                  }}
+                  className="w-8 rounded border border-black/10 bg-white px-1 py-0.5 text-center text-[12px] outline-none focus:border-black/20"
+                />
+                <span>/ {totalPages}</span>
+              </span>
+            ) : (
+              <button
+                onClick={() => {
+                  setPageInputValue(String(currentPage));
+                  setEditingPage(true);
+                }}
+                className="font-app text-[12px] tabular-nums text-ink-light hover:text-ink transition-colors"
+              >
+                {totalPages > 0 ? `${currentPage} / ${totalPages}` : "—"}
+              </button>
+            )}
             <button
               onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
               disabled={currentPage >= totalPages}
