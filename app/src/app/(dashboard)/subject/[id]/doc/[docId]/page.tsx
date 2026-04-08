@@ -4,7 +4,6 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
-  ArrowLeft,
   MessageSquare,
   FileText,
   ListChecks,
@@ -19,15 +18,18 @@ import {
   Download,
   MoreHorizontal,
   Plus,
-  Headphones,
-  Highlighter,
   ChevronDown,
   GripVertical,
   ArrowRight,
   ZoomIn,
   ZoomOut,
-  Maximize,
+  Search,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { useTopBar } from "@/lib/TopBarContext";
 
 const PdfViewer = dynamic(() => import("@/components/app/PdfViewer"), {
   ssr: false,
@@ -220,6 +222,86 @@ const MOCK_SETS: SavedSet[] = [
 export default function DocumentPage() {
   const params = useParams();
   const subjectId = params.id as string;
+  const docId = params.docId as string;
+  const supabase = createClient();
+  const { user } = useAuth();
+  const { setBreadcrumb } = useTopBar();
+
+  /* ── Document data ── */
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [docTitle, setDocTitle] = useState("Document");
+  const [subjectName, setSubjectName] = useState("");
+  const [docLoading, setDocLoading] = useState(true);
+  const titleSaveRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchDoc = async () => {
+      const [docResult, subjectResult] = await Promise.all([
+        supabase
+          .from("documents")
+          .select("title, file_path, status")
+          .eq("id", docId)
+          .single(),
+        supabase
+          .from("subjects")
+          .select("name")
+          .eq("id", subjectId)
+          .single(),
+      ]);
+
+      if (subjectResult.data?.name) setSubjectName(subjectResult.data.name);
+      if (docResult.data?.title) setDocTitle(docResult.data.title);
+
+      if (docResult.data?.file_path && docResult.data.status === "ready") {
+        const { data: urlData } = await supabase.storage
+          .from("documents")
+          .createSignedUrl(docResult.data.file_path, 3600);
+        if (urlData?.signedUrl) setPdfUrl(urlData.signedUrl);
+      }
+      setDocLoading(false);
+    };
+    fetchDoc();
+  }, [user, docId, subjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleTitleChange = (val: string) => {
+    setDocTitle(val);
+    if (titleSaveRef.current) clearTimeout(titleSaveRef.current);
+    titleSaveRef.current = setTimeout(async () => {
+      await supabase
+        .from("documents")
+        .update({ title: val, updated_at: new Date().toISOString() })
+        .eq("id", docId);
+    }, 800);
+  };
+
+  const handleDownload = useCallback(async () => {
+    if (!pdfUrl) return;
+    const res = await fetch(pdfUrl);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${docTitle}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [pdfUrl, docTitle]);
+
+  // Sync breadcrumb to top bar
+  useEffect(() => {
+    setBreadcrumb({
+      subjectId,
+      subjectName: subjectName || "Subject",
+      docTitle,
+      onTitleChange: handleTitleChange,
+      onDownload: pdfUrl ? handleDownload : undefined,
+    });
+  }, [subjectId, subjectName, docTitle, pdfUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear breadcrumb on unmount
+  useEffect(() => {
+    return () => setBreadcrumb(null);
+  }, [setBreadcrumb]);
 
   /* ── Resizable panel ── */
   const [rightWidth, setRightWidth] = useState(480);
@@ -302,12 +384,88 @@ export default function DocumentPage() {
   const [scrollToPage, setScrollToPage] = useState<number | undefined>();
   const [zoom, setZoom] = useState(1);
   const [pdfBaseWidth, setPdfBaseWidth] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResultCount, setSearchResultCount] = useState<number | null>(null);
   const pdfScrollRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const ZOOM_MIN = 0.5;
   const ZOOM_MAX = 2.5;
   const ZOOM_STEP = 0.15;
+
+  const handleSearch = useCallback(() => {
+    if (!searchQuery.trim() || !pdfScrollRef.current) {
+      setSearchResultCount(null);
+      return;
+    }
+    // Clear previous highlights
+    pdfScrollRef.current.querySelectorAll("mark[data-pdf-search]").forEach((el) => {
+      const parent = el.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(el.textContent || ""), el);
+        parent.normalize();
+      }
+    });
+
+    const query = searchQuery.trim().toLowerCase();
+    const textSpans = pdfScrollRef.current.querySelectorAll(".react-pdf__Page__textContent span");
+    let count = 0;
+    let firstMatch: Element | null = null;
+
+    textSpans.forEach((span) => {
+      const text = span.textContent || "";
+      if (text.toLowerCase().includes(query)) {
+        // Wrap matches in mark tags
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+        const parts = text.split(regex);
+        if (parts.length > 1) {
+          span.textContent = "";
+          parts.forEach((part) => {
+            if (part.toLowerCase() === query) {
+              const mark = document.createElement("mark");
+              mark.setAttribute("data-pdf-search", "true");
+              mark.style.backgroundColor = "rgba(255, 200, 0, 0.45)";
+              mark.style.borderRadius = "2px";
+              mark.textContent = part;
+              span.appendChild(mark);
+              count++;
+              if (!firstMatch) firstMatch = mark;
+            } else {
+              span.appendChild(document.createTextNode(part));
+            }
+          });
+        }
+      }
+    });
+
+    setSearchResultCount(count);
+    if (firstMatch) {
+      (firstMatch as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [searchQuery]);
+
+  // Focus search input when opened
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  // Clear highlights when search closes
+  useEffect(() => {
+    if (!searchOpen && pdfScrollRef.current) {
+      pdfScrollRef.current.querySelectorAll("mark[data-pdf-search]").forEach((el) => {
+        const parent = el.parentNode;
+        if (parent) {
+          parent.replaceChild(document.createTextNode(el.textContent || ""), el);
+          parent.normalize();
+        }
+      });
+      setSearchQuery("");
+      setSearchResultCount(null);
+    }
+  }, [searchOpen]);
 
   // Measure the scroll container width — stable regardless of content size
   useEffect(() => {
@@ -388,40 +546,8 @@ export default function DocumentPage() {
     >
       {/* ════════ LEFT: Document Viewer ════════ */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#EEEAE5]">
-        {/* Breadcrumb */}
-        <div className="flex shrink-0 items-center justify-between bg-white/80 px-5 py-2.5 backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-[13px]">
-            <a
-              href={`/subject/${subjectId}`}
-              className="flex items-center gap-1.5 font-app text-ink-muted transition-colors hover:text-ink"
-            >
-              <ArrowLeft size={14} />
-              Back
-            </a>
-            <span className="text-ink-muted/40">/</span>
-            <span className="font-app font-medium">Document</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink">
-              <Download size={14} />
-            </button>
-            <button className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink">
-              <MoreHorizontal size={14} />
-            </button>
-          </div>
-        </div>
-
         {/* PDF toolbar */}
         <div className="flex shrink-0 items-center gap-3 border-b border-black/5 bg-white/60 px-5 py-2 backdrop-blur-sm">
-          <button className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-app text-[12px] text-ink-muted transition-colors hover:bg-black/5 hover:text-ink">
-            <Headphones size={13} />
-            Listen
-          </button>
-          <button className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-app text-[12px] text-ink-muted transition-colors hover:bg-black/5 hover:text-ink">
-            <Highlighter size={13} />
-            Annotations
-          </button>
-          <div className="mx-1 h-4 w-px bg-black/8" />
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => goToPage(Math.max(1, currentPage - 1))}
@@ -450,9 +576,13 @@ export default function DocumentPage() {
             >
               <ZoomOut size={13} />
             </button>
-            <span className="font-app text-[12px] tabular-nums text-ink-light w-10 text-center">
+            <button
+              onClick={() => setZoom(1)}
+              className="font-app text-[12px] tabular-nums text-ink-light w-10 text-center hover:text-ink transition-colors"
+              title="Reset to 100%"
+            >
               {Math.round(zoom * 100)}%
-            </span>
+            </button>
             <button
               onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
               disabled={zoom >= ZOOM_MAX}
@@ -460,24 +590,84 @@ export default function DocumentPage() {
             >
               <ZoomIn size={13} />
             </button>
+          </div>
+          <div className="mx-1 h-4 w-px bg-black/8" />
+          <button
+            onClick={() => setSearchOpen(!searchOpen)}
+            className={`rounded p-1.5 transition-colors hover:bg-black/5 ${searchOpen ? "text-ink bg-black/5" : "text-ink-muted hover:text-ink"}`}
+            title="Search"
+          >
+            <Search size={13} />
+          </button>
+          <button
+            onClick={handleDownload}
+            disabled={!pdfUrl}
+            className="rounded p-1.5 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
+            title="Download"
+          >
+            <Download size={13} />
+          </button>
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="rounded p-1.5 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink"
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          >
+            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          </button>
+        </div>
+
+        {/* Search bar */}
+        {searchOpen && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/80 px-5 py-2 backdrop-blur-sm">
+            <Search size={13} className="shrink-0 text-ink-muted" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="Search in document..."
+              className="flex-1 bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/50"
+            />
+            {searchResultCount !== null && (
+              <span className="font-app text-[11px] text-ink-muted">
+                {searchResultCount} {searchResultCount === 1 ? "match" : "matches"}
+              </span>
+            )}
             <button
-              onClick={() => setZoom(1)}
-              className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink ml-0.5"
-              title="Fit to width"
+              onClick={() => setSearchOpen(false)}
+              className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink"
             >
-              <Maximize size={13} />
+              <X size={13} />
             </button>
           </div>
-        </div>
+        )}
 
         {/* Document content */}
         <div ref={pdfScrollRef} className="flex-1 overflow-y-auto overflow-x-auto px-4 py-4">
-          <PdfViewer
-            url="/sample.pdf"
-            onPageChange={handlePageChange}
-            currentPage={scrollToPage}
-            pageWidth={pdfBaseWidth > 0 ? pdfBaseWidth * zoom : undefined}
-          />
+          {docLoading ? (
+            <div className="flex flex-col items-center gap-3">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="animate-pulse rounded-lg bg-white"
+                  style={{ width: "100%", aspectRatio: "1 / 1.414", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)" }}
+                />
+              ))}
+            </div>
+          ) : pdfUrl ? (
+            <PdfViewer
+              url={pdfUrl}
+              onPageChange={handlePageChange}
+              currentPage={scrollToPage}
+              pageWidth={pdfBaseWidth > 0 ? pdfBaseWidth * zoom : undefined}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <p className="font-app text-[14px] font-medium text-ink">No PDF available</p>
+              <p className="mt-1 font-app text-[13px] text-ink-muted">This document has no file attached yet.</p>
+            </div>
+          )}
           <div className="h-4" />
         </div>
       </div>
@@ -485,7 +675,7 @@ export default function DocumentPage() {
       {/* ════════ DRAGGABLE DIVIDER ════════ */}
       <div
         onMouseDown={startDrag}
-        className="group relative z-10 w-0 shrink-0 cursor-col-resize"
+        className={`group relative z-10 w-0 shrink-0 cursor-col-resize ${isFullscreen ? "hidden" : ""}`}
       >
         <div className="absolute inset-y-0 -left-[1.5px] w-[3px] bg-black/[0.06] transition-colors group-hover:bg-black/[0.14] group-active:bg-black/20" />
         <div className="absolute inset-y-0 -left-2 w-5" />
@@ -496,8 +686,8 @@ export default function DocumentPage() {
 
       {/* ════════ RIGHT: AI Tools Panel ════════ */}
       <div
-        style={{ width: rightWidth }}
-        className="flex shrink-0 flex-col overflow-hidden bg-white"
+        style={{ width: isFullscreen ? 0 : rightWidth }}
+        className={`flex shrink-0 flex-col overflow-hidden bg-white transition-[width] duration-300 ${isFullscreen ? "w-0" : ""}`}
       >
         {/* Tab bar — only show when tabs exist */}
         {tabs.length > 0 && (
@@ -613,10 +803,10 @@ export default function DocumentPage() {
                   ))}
                 </div>
 
-                {/* My Sets */}
+                {/* My Resources */}
                 <div className="mt-7">
                   <p className="mb-3 font-app text-[11px] font-medium uppercase tracking-wider text-ink-muted">
-                    My Sets
+                    My Resources
                   </p>
                   <div className="space-y-0.5">
                     {MOCK_SETS.map((set) => {

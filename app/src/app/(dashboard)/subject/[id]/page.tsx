@@ -20,9 +20,12 @@ import {
   Globe,
   ChevronDown,
   CloudUpload,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { uploadDocument, deleteDocumentFile } from "@/lib/uploadDocument";
 
 /* ─── Types ─── */
 
@@ -73,6 +76,11 @@ export default function SubjectPage() {
   const [learningQuery, setLearningQuery] = useState("");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [docMenuId, setDocMenuId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const addMenuRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -178,6 +186,102 @@ export default function SubjectPage() {
     setSubjectDesc(val);
     saveSubject(subjectName, val);
   };
+
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !user) return;
+    setUploading(true);
+    setUploadError(null);
+    let hasError = false;
+
+    for (const file of Array.from(files)) {
+      console.log("Uploading:", file.name, file.type, file.size);
+      const result = await uploadDocument(supabase, file, user.id, id);
+
+      if (result.error) {
+        console.error("Upload error:", result.error);
+        setUploadError(result.error);
+        hasError = true;
+        continue;
+      }
+
+      console.log("Upload success:", result.documentId, result.title);
+      // Add to content list immediately
+      setContent((prev) => [
+        {
+          id: result.documentId,
+          name: result.title,
+          type: "PDF",
+          preview: "",
+          added: "Just now",
+          lastViewed: "—",
+        },
+        ...prev,
+      ]);
+    }
+
+    setUploading(false);
+    if (!hasError) setUploadModalOpen(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileUpload(e.dataTransfer.files);
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    setDocMenuId(null);
+    // Get file_path before deleting the row
+    const { data } = await supabase
+      .from("documents")
+      .select("file_path")
+      .eq("id", docId)
+      .single();
+
+    // Delete DB row
+    const { error } = await supabase
+      .from("documents")
+      .delete()
+      .eq("id", docId);
+
+    if (!error) {
+      setContent((prev) => prev.filter((c) => c.id !== docId));
+      // Delete storage file
+      if (data?.file_path) {
+        await deleteDocumentFile(supabase, data.file_path);
+      }
+    }
+  };
+
+  const startRename = (item: ContentItem) => {
+    setDocMenuId(null);
+    setRenamingId(item.id);
+    setRenameValue(item.name);
+  };
+
+  const commitRename = async () => {
+    if (!renamingId || !renameValue.trim()) {
+      setRenamingId(null);
+      return;
+    }
+    await supabase
+      .from("documents")
+      .update({ title: renameValue.trim(), updated_at: new Date().toISOString() })
+      .eq("id", renamingId);
+
+    setContent((prev) =>
+      prev.map((c) => (c.id === renamingId ? { ...c, name: renameValue.trim() } : c))
+    );
+    setRenamingId(null);
+  };
+
+  // Close doc menu on outside click
+  useEffect(() => {
+    if (!docMenuId) return;
+    const close = () => setDocMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [docMenuId]);
 
   /* Close dropdown on outside click */
   useEffect(() => {
@@ -423,76 +527,124 @@ export default function SubjectPage() {
           /* ─── List View ─── */
           <div>
             {/* Column headers */}
-            <div className="flex items-center gap-4 border-b border-black/5 px-3 pb-2.5 font-app text-[12px] text-ink-muted">
+            <div className="flex items-center gap-4 border-b border-black/5 px-3 pb-2.5 font-app text-[13px] text-ink-muted">
               <span className="flex-1">Name</span>
-              <span className="w-12 text-center">Type</span>
-              <span className="hidden w-24 text-right md:block">Added</span>
-              <span className="hidden w-24 text-right md:block">Viewed</span>
+              <span className="w-14 text-center">Type</span>
+              <span className="hidden w-28 text-right md:block">Added</span>
+              <span className="hidden w-28 text-right md:block">Viewed</span>
               <span className="w-8" />
             </div>
 
             {/* Rows */}
             <div>
               {content.map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/subject/${id}/doc/${item.id}`}
-                  className="group flex items-center gap-4 border-b border-black/[0.03] px-3 py-3 transition-colors hover:bg-white/60"
-                >
-                  {/* Thumbnail */}
-                  <div
-                    className="flex h-[44px] w-[34px] shrink-0 items-center justify-center rounded-[5px] bg-white"
-                    style={{
-                      boxShadow:
-                        "0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 3px 0px rgba(0,0,0,0.04), 0px 6px 4px 0px rgba(0,0,0,0.02), 0px 11px 4px 0px rgba(0,0,0,0.01), 0px 0px 0px 1px rgba(0,0,0,0.03)",
-                    }}
+                <div key={item.id} className="relative">
+                  <Link
+                    href={`/subject/${id}/doc/${item.id}`}
+                    className="group flex items-center gap-4 border-b border-black/[0.03] px-3 py-3 transition-colors hover:bg-white/60"
                   >
-                    {item.type === "LINK" ? (
-                      <Globe size={13} className="text-ink-muted/60" />
-                    ) : item.type === "NOTE" ? (
-                      <ClipboardPaste
-                        size={13}
-                        className="text-ink-muted/60"
-                      />
-                    ) : (
-                      <FileText size={13} className="text-ink-muted/60" />
-                    )}
-                  </div>
+                    {/* Thumbnail */}
+                    <div
+                      className="flex h-[44px] w-[34px] shrink-0 items-center justify-center rounded-[5px] bg-white"
+                      style={{
+                        boxShadow:
+                          "0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 3px 0px rgba(0,0,0,0.04), 0px 6px 4px 0px rgba(0,0,0,0.02), 0px 11px 4px 0px rgba(0,0,0,0.01), 0px 0px 0px 1px rgba(0,0,0,0.03)",
+                      }}
+                    >
+                      {item.type === "LINK" ? (
+                        <Globe size={13} className="text-ink-muted/60" />
+                      ) : item.type === "NOTE" ? (
+                        <ClipboardPaste
+                          size={13}
+                          className="text-ink-muted/60"
+                        />
+                      ) : (
+                        <FileText size={13} className="text-ink-muted/60" />
+                      )}
+                    </div>
 
-                  {/* Name & preview */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-app text-[13px] font-medium">
-                      {item.name}
-                    </p>
-                    <p className="mt-0.5 truncate font-app text-[12px] text-ink-muted/60">
-                      {item.preview}
-                    </p>
-                  </div>
+                    {/* Name & preview */}
+                    <div className="min-w-0 flex-1">
+                      {renamingId === item.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onBlur={commitRename}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitRename();
+                            if (e.key === "Escape") setRenamingId(null);
+                          }}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                          className="w-full truncate rounded-md border border-black/10 bg-white px-2 py-0.5 font-app text-[14px] font-medium outline-none focus:border-black/20"
+                        />
+                      ) : (
+                        <p
+                          className="truncate font-app text-[14px] font-medium"
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            startRename(item);
+                          }}
+                        >
+                          {item.name}
+                        </p>
+                      )}
+                      <p className="mt-0.5 truncate font-app text-[12px] text-ink-muted/60">
+                        {item.preview}
+                      </p>
+                    </div>
 
-                  {/* Type */}
-                  <span className="w-12 text-center font-app text-[11px] font-medium text-ink-muted">
-                    {item.type}
-                  </span>
+                    {/* Type */}
+                    <span className="w-14 text-center font-app text-[13px] font-medium text-ink-muted">
+                      {item.type}
+                    </span>
 
-                  {/* Dates */}
-                  <span className="hidden w-24 text-right font-app text-[12px] text-ink-muted md:block">
-                    {item.added}
-                  </span>
-                  <span className="hidden w-24 text-right font-app text-[12px] text-ink-muted md:block">
-                    {item.lastViewed}
-                  </span>
+                    {/* Dates */}
+                    <span className="hidden w-28 text-right font-app text-[13px] text-ink-muted md:block">
+                      {item.added}
+                    </span>
+                    <span className="hidden w-28 text-right font-app text-[13px] text-ink-muted md:block">
+                      {item.lastViewed}
+                    </span>
 
-                  {/* More button */}
-                  <button
-                    className="w-8 rounded-md p-1.5 text-ink-muted opacity-0 transition-all hover:bg-cream-dark/60 group-hover:opacity-100"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                  >
-                    <MoreHorizontal size={14} />
-                  </button>
-                </Link>
+                    {/* More button */}
+                    <button
+                      className="w-8 rounded-md p-1.5 text-ink-muted opacity-0 transition-all hover:bg-cream-dark/60 group-hover:opacity-100"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDocMenuId(docMenuId === item.id ? null : item.id);
+                      }}
+                    >
+                      <MoreHorizontal size={14} />
+                    </button>
+                  </Link>
+
+                  {/* Dropdown menu */}
+                  {docMenuId === item.id && (
+                    <div
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                      className="absolute right-2 top-12 z-20 min-w-[140px] rounded-xl border border-black/8 bg-white py-1 shadow-lg"
+                    >
+                      <button
+                        onClick={() => startRename(item)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-ink-light transition-colors hover:bg-cream-dark/50"
+                      >
+                        <Pencil size={13} />
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => handleDeleteDocument(item.id)}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        <Trash2 size={13} />
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
 
@@ -609,31 +761,49 @@ export default function SubjectPage() {
             <div
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => { e.preventDefault(); setDragOver(false); /* handle files */ }}
+              onDrop={handleDrop}
               className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
                 dragOver
                   ? "border-ink/30 bg-cream-dark/40"
-                  : "border-black/10 bg-cream-dark/15"
+                  : uploading
+                    ? "border-black/10 bg-cream-dark/30"
+                    : "border-black/10 bg-cream-dark/15"
               }`}
             >
-              <CloudUpload size={32} strokeWidth={1.2} className="mb-3 text-ink-muted" />
-              <p className="font-app text-[14px] font-medium">
-                Drop files here
-              </p>
-              <p className="mt-1 font-app text-[12px] text-ink-muted">
-                or click to browse
-              </p>
+              {uploading ? (
+                <>
+                  <div className="mb-3 h-8 w-8 animate-spin rounded-full border-2 border-ink-muted/20 border-t-ink" />
+                  <p className="font-app text-[14px] font-medium">Uploading...</p>
+                </>
+              ) : (
+                <>
+                  <CloudUpload size={32} strokeWidth={1.2} className="mb-3 text-ink-muted" />
+                  <p className="font-app text-[14px] font-medium">
+                    Drop PDF here
+                  </p>
+                  <p className="mt-1 font-app text-[12px] text-ink-muted">
+                    or click to browse
+                  </p>
+                </>
+              )}
               <input
                 type="file"
                 multiple
-                accept=".pdf,.docx,.pptx,.txt,.mp3,.mp4"
-                className="absolute inset-0 cursor-pointer opacity-0"
-                onChange={() => { /* handle file select */ }}
+                accept=".pdf"
+                disabled={uploading}
+                className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-wait"
+                onChange={(e) => handleFileUpload(e.target.files)}
               />
             </div>
 
+            {uploadError && (
+              <p className="mt-2 text-center font-app text-[12px] text-red-600">
+                {uploadError}
+              </p>
+            )}
+
             <p className="mt-3 text-center font-app text-[11px] text-ink-muted/60">
-              PDF, DOCX, PPTX, TXT, MP3 &middot; Max 50MB
+              PDF only &middot; Max 50MB
             </p>
 
             {/* Divider */}

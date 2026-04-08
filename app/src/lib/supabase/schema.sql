@@ -33,8 +33,13 @@ CREATE TABLE documents (
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
   title TEXT NOT NULL DEFAULT 'Untitled',
   type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'uploading' CHECK (status IN ('uploading', 'ready', 'error')),
   file_path TEXT,
   source_url TEXT,
+  mime_type TEXT,
+  size_bytes BIGINT,
+  original_filename TEXT,
+  upload_error TEXT,
   raw_text TEXT,
   page_count INT,
   word_count INT,
@@ -49,7 +54,10 @@ CREATE INDEX idx_documents_recent ON documents(user_id, last_viewed_at DESC);
 
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own documents" ON documents FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Users can insert own documents" ON documents FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can insert own documents" ON documents FOR INSERT WITH CHECK (
+  auth.uid() = user_id
+  AND EXISTS (SELECT 1 FROM subjects WHERE subjects.id = subject_id AND subjects.user_id = auth.uid())
+);
 CREATE POLICY "Users can update own documents" ON documents FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete own documents" ON documents FOR DELETE USING (auth.uid() = user_id);
 

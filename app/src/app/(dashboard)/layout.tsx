@@ -4,12 +4,14 @@ import { useState } from "react";
 import AppSidebar from "@/components/app/AppSidebar";
 import AppTopBar from "@/components/app/AppTopBar";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+import { TopBarProvider } from "@/lib/TopBarContext";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <AuthProvider>
+    <TopBarProvider>
     <div className="flex h-screen overflow-hidden bg-[#FAF7F4]">
       {/* Mobile drawer overlay */}
       {sidebarOpen && (
@@ -49,6 +51,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+    </TopBarProvider>
     </AuthProvider>
   );
 }

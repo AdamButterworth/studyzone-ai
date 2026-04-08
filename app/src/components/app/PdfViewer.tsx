@@ -77,7 +77,7 @@ export default function PdfViewer({
   );
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center" style={{ minWidth: "fit-content" }}>
       <Document
         file={url}
         onLoadSuccess={onDocumentLoadSuccess}
