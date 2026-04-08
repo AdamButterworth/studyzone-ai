@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Plus,
   Search,
@@ -53,44 +54,55 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
     if (fetchedFor.current === user.id) return;
     fetchedFor.current = user.id;
 
-    console.log("Sidebar fetch starting:", { userId: user.id, authLoading });
-
     const fetchSidebar = async () => {
-      const { data: subjectsData, error: subjectsError } = await supabase
-        .from("subjects")
-        .select("id, name, icon")
-        .eq("user_id", user.id)
-        .order("position")
-        .order("created_at", { ascending: false });
+      // Fetch subjects and recents in parallel
+      const [subjectsResult, recentsResult] = await Promise.all([
+        supabase
+          .from("subjects")
+          .select("id, name, icon")
+          .eq("user_id", user.id)
+          .order("position")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("documents")
+          .select("id, title, subject_id")
+          .eq("user_id", user.id)
+          .not("last_viewed_at", "is", null)
+          .order("last_viewed_at", { ascending: false })
+          .limit(4),
+      ]);
 
-      if (subjectsError) {
-        console.error("Sidebar subjects error:", { userId: user.id, code: subjectsError.code, message: subjectsError.message });
-      } else if (subjectsData) {
-        console.log("Sidebar subjects loaded:", { userId: user.id, count: subjectsData.length });
-        const withCounts = await Promise.all(
-          subjectsData.map(async (s) => {
-            const { count } = await supabase
-              .from("documents")
-              .select("*", { count: "exact", head: true })
-              .eq("subject_id", s.id);
-            return { ...s, document_count: count || 0 };
-          })
-        );
-        setSubjects(withCounts);
+      if (subjectsResult.error) {
+        console.error("Sidebar subjects error:", subjectsResult.error.code, subjectsResult.error.message);
+      } else if (subjectsResult.data) {
+        // Render subjects immediately with count=0
+        const subjectsList = subjectsResult.data.map((s) => ({ ...s, document_count: 0 }));
+        setSubjects(subjectsList);
+
+        // Single query for all doc counts instead of N+1
+        if (subjectsList.length > 0) {
+          const ids = subjectsList.map((s) => s.id);
+          const { data: docs } = await supabase
+            .from("documents")
+            .select("subject_id")
+            .in("subject_id", ids);
+
+          if (docs) {
+            const counts: Record<string, number> = {};
+            for (const d of docs) {
+              counts[d.subject_id] = (counts[d.subject_id] || 0) + 1;
+            }
+            setSubjects((prev) =>
+              prev.map((s) => ({ ...s, document_count: counts[s.id] || 0 }))
+            );
+          }
+        }
       }
 
-      const { data: recentsData, error: recentsError } = await supabase
-        .from("documents")
-        .select("id, title, subject_id")
-        .eq("user_id", user.id)
-        .not("last_viewed_at", "is", null)
-        .order("last_viewed_at", { ascending: false })
-        .limit(4);
-
-      if (recentsError) {
-        console.error("Sidebar recents error:", { userId: user.id, code: recentsError.code, message: recentsError.message });
-      } else if (recentsData) {
-        setRecentDocs(recentsData);
+      if (recentsResult.error) {
+        console.error("Sidebar recents error:", recentsResult.error.code, recentsResult.error.message);
+      } else if (recentsResult.data) {
+        setRecentDocs(recentsResult.data);
       }
     };
 
@@ -150,12 +162,12 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
       <div className="flex w-[280px] flex-col h-full">
         {/* Header */}
         <div className="flex h-14 items-center justify-between px-4">
-          <a href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2">
             <img src="/icon.svg" alt="StudyZone AI" className="h-6 w-6" />
             <span className="text-sm font-semibold tracking-tight font-app-heading">
               StudyZone AI
             </span>
-          </a>
+          </Link>
           <button
             onClick={onToggle}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink"
@@ -209,14 +221,14 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
             )}
             {recentsOpen &&
               recentDocs.map((doc) => (
-                <a
+                <Link
                   key={doc.id}
                   href={`/subject/${doc.subject_id}/doc/${doc.id}`}
                   className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
                 >
                   <div className="h-1 w-1 shrink-0 rounded-full bg-ink-muted/40" />
                   <span className="truncate">{doc.title}</span>
-                </a>
+                </Link>
               ))}
           </div>
 
@@ -254,7 +266,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
             )}
             {subjectsOpen &&
               subjects.map((subject) => (
-                <a
+                <Link
                   key={subject.id}
                   href={`/subject/${subject.id}`}
                   className="group flex items-center justify-between rounded-lg px-3 py-1.5 text-ink/85 transition-colors hover:bg-cream-dark/50"
@@ -270,20 +282,20 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
                     size={14}
                     className="hidden shrink-0 text-ink-muted/40 group-hover:block"
                   />
-                </a>
+                </Link>
               ))}
           </div>
         </div>
 
         {/* Bottom section */}
         <div className="border-t border-black/5 px-3 py-3">
-          <a
+          <Link
             href="/help"
             className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink/85"
           >
             <HelpCircle size={14} />
             Help & Feedback
-          </a>
+          </Link>
           <a
             href="#"
             className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink/85"

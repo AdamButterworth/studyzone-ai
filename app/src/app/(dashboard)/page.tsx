@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import NextLink from "next/link";
 import { Upload, Link, ClipboardPaste, Plus, Clock, ArrowRight, Search, MoreHorizontal, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -207,7 +208,7 @@ export default function AppDashboard() {
 
           {/* Subject cards */}
           {subjects.map((subject) => (
-            <a
+            <NextLink
               key={subject.id}
               href={`/subject/${subject.id}`}
               className="group relative flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
@@ -248,7 +249,7 @@ export default function AppDashboard() {
               <span className="mt-auto pt-3 text-[11px] text-ink-muted/60">
                 {timeAgo(subject.updated_at)}
               </span>
-            </a>
+            </NextLink>
           ))}
 
           {/* Loading skeleton */}
@@ -292,7 +293,7 @@ export default function AppDashboard() {
             </p>
           )}
           {recents.map((item) => (
-            <a
+            <NextLink
               key={item.id}
               href={`/subject/${item.subject_id}/doc/${item.id}`}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white"
@@ -304,7 +305,7 @@ export default function AppDashboard() {
                 <p className="truncate text-sm font-medium">{item.title}</p>
                 <p className="text-xs text-ink-muted">{item.subject_name}</p>
               </div>
-            </a>
+            </NextLink>
           ))}
         </div>
       </div>

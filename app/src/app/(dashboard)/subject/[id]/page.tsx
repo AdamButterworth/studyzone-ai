@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   Plus,
   Upload,
@@ -45,6 +46,8 @@ function timeAgo(date: string): string {
   return `${days}d ago`;
 }
 
+const PAGE_SIZE = 20;
+
 /* ─── Component ─── */
 
 export default function SubjectPage() {
@@ -58,6 +61,8 @@ export default function SubjectPage() {
   const [subjectIcon, setSubjectIcon] = useState("\u{1F4DA}");
   const [content, setContent] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [pasteToast, setPasteToast] = useState<{
@@ -70,49 +75,69 @@ export default function SubjectPage() {
   const addMenuRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const isEmpty = content.length === 0;
+  const isEmpty = content.length === 0 && !loading;
 
-  /* Load subject + documents from DB */
+  const mapDocs = (docs: any[]): ContentItem[] =>
+    docs.map((d) => ({
+      id: d.id,
+      name: d.title,
+      type: d.type.toUpperCase(),
+      preview: d.raw_text?.slice(0, 120) || "",
+      added: timeAgo(d.created_at),
+      lastViewed: d.last_viewed_at ? timeAgo(d.last_viewed_at) : "—",
+    }));
+
+  /* Load subject + documents from DB (parallel, paginated) */
   useEffect(() => {
     if (authLoading || !user) return;
 
-    const fetchSubject = async () => {
-      const { data: subjectData } = await supabase
-        .from("subjects")
-        .select("*")
-        .eq("id", id)
-        .single();
+    const fetchData = async () => {
+      const [subjectResult, docsResult] = await Promise.all([
+        supabase
+          .from("subjects")
+          .select("name, description, icon")
+          .eq("id", id)
+          .single(),
+        supabase
+          .from("documents")
+          .select("id, title, type, raw_text, created_at, last_viewed_at")
+          .eq("subject_id", id)
+          .order("created_at", { ascending: false })
+          .range(0, PAGE_SIZE - 1),
+      ]);
 
-      if (subjectData) {
-        setSubjectName(subjectData.name);
-        setSubjectDesc(subjectData.description || "");
-        setSubjectIcon(subjectData.icon || "\u{1F4DA}");
+      if (subjectResult.data) {
+        setSubjectName(subjectResult.data.name);
+        setSubjectDesc(subjectResult.data.description || "");
+        setSubjectIcon(subjectResult.data.icon || "\u{1F4DA}");
       }
 
-      const { data: docs } = await supabase
-        .from("documents")
-        .select("*")
-        .eq("subject_id", id)
-        .order("created_at", { ascending: false });
-
-      if (docs) {
-        setContent(
-          docs.map((d: any) => ({
-            id: d.id,
-            name: d.title,
-            type: d.type.toUpperCase(),
-            preview: d.raw_text?.slice(0, 120) || "",
-            added: timeAgo(d.created_at),
-            lastViewed: d.last_viewed_at ? timeAgo(d.last_viewed_at) : "—",
-          }))
-        );
+      if (docsResult.data) {
+        setContent(mapDocs(docsResult.data));
+        setHasMore(docsResult.data.length === PAGE_SIZE);
       }
 
       setLoading(false);
     };
 
-    fetchSubject();
+    fetchData();
   }, [user, authLoading, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    const { data } = await supabase
+      .from("documents")
+      .select("id, title, type, raw_text, created_at, last_viewed_at")
+      .eq("subject_id", id)
+      .order("created_at", { ascending: false })
+      .range(content.length, content.length + PAGE_SIZE - 1);
+
+    if (data) {
+      setContent((prev) => [...prev, ...mapDocs(data)]);
+      setHasMore(data.length === PAGE_SIZE);
+    }
+    setLoadingMore(false);
+  };
 
   /* Auto-save subject name/description (debounced) */
   const saveSubject = useCallback(
@@ -216,7 +241,7 @@ export default function SubjectPage() {
               />
               {content.length > 0 && (
                 <span className="text-[15px] font-normal text-ink-muted">
-                  ({content.length})
+                  ({content.length}{hasMore ? "+" : ""})
                 </span>
               )}
             </div>
@@ -320,7 +345,22 @@ export default function SubjectPage() {
 
       {/* ─── Content Area ─── */}
       <div className="mt-6 flex-1 pb-20">
-        {isEmpty ? (
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="space-y-2">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex animate-pulse items-center gap-4 px-3 py-3">
+                <div className="h-[44px] w-[34px] rounded-[5px] bg-cream-dark" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-2/3 rounded bg-cream-dark" />
+                  <div className="h-3 w-1/3 rounded bg-cream-dark" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && isEmpty ? (
           /* ─── Empty State ─── */
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <h2 className="font-app-heading text-[22px]">
@@ -352,7 +392,7 @@ export default function SubjectPage() {
               ))}
             </div>
           </div>
-        ) : viewMode === "list" ? (
+        ) : !loading && viewMode === "list" ? (
           /* ─── List View ─── */
           <div>
             {/* Column headers */}
@@ -367,7 +407,7 @@ export default function SubjectPage() {
             {/* Rows */}
             <div>
               {content.map((item) => (
-                <a
+                <Link
                   key={item.id}
                   href={`/subject/${id}/doc/${item.id}`}
                   className="group flex items-center gap-4 border-b border-black/[0.03] px-3 py-3 transition-colors hover:bg-white/60"
@@ -425,38 +465,66 @@ export default function SubjectPage() {
                   >
                     <MoreHorizontal size={14} />
                   </button>
-                </a>
+                </Link>
               ))}
             </div>
-          </div>
-        ) : (
-          /* ─── Grid View ─── */
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {content.map((item) => (
-              <a
-                key={item.id}
-                href="#"
-                className="group flex flex-col rounded-2xl border border-black/5 bg-white p-4 transition-all hover:border-black/10 hover:shadow-md"
-              >
-                <div
-                  className="flex h-[56px] w-[44px] items-center justify-center rounded-[5px] bg-cream-dark/30"
-                  style={{
-                    boxShadow:
-                      "0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 3px 0px rgba(0,0,0,0.04), 0px 6px 4px 0px rgba(0,0,0,0.02), 0px 0px 0px 1px rgba(0,0,0,0.03)",
-                  }}
+
+            {/* Load more */}
+            {hasMore && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="font-app text-[13px] text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
                 >
-                  <FileText size={16} className="text-ink-muted/60" />
-                </div>
-                <p className="mt-3 truncate font-app text-[13px] font-medium">
-                  {item.name}
-                </p>
-                <p className="mt-1 font-app text-[11px] text-ink-muted">
-                  {item.type} &middot; {item.added}
-                </p>
-              </a>
-            ))}
+                  {loadingMore ? "Loading..." : "Load more"}
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        ) : !loading ? (
+          /* ─── Grid View ─── */
+          <>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {content.map((item) => (
+                <Link
+                  key={item.id}
+                  href={`/subject/${id}/doc/${item.id}`}
+                  className="group flex flex-col rounded-2xl border border-black/5 bg-white p-4 transition-all hover:border-black/10 hover:shadow-md"
+                >
+                  <div
+                    className="flex h-[56px] w-[44px] items-center justify-center rounded-[5px] bg-cream-dark/30"
+                    style={{
+                      boxShadow:
+                        "0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 3px 0px rgba(0,0,0,0.04), 0px 6px 4px 0px rgba(0,0,0,0.02), 0px 0px 0px 1px rgba(0,0,0,0.03)",
+                    }}
+                  >
+                    <FileText size={16} className="text-ink-muted/60" />
+                  </div>
+                  <p className="mt-3 truncate font-app text-[13px] font-medium">
+                    {item.name}
+                  </p>
+                  <p className="mt-1 font-app text-[11px] text-ink-muted">
+                    {item.type} &middot; {item.added}
+                  </p>
+                </Link>
+              ))}
+            </div>
+
+            {/* Load more */}
+            {hasMore && (
+              <div className="mt-4 text-center">
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  className="font-app text-[13px] text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+                >
+                  {loadingMore ? "Loading..." : "Load more"}
+                </button>
+              </div>
+            )}
+          </>
+        ) : null}
       </div>
 
       {/* ─── Learning Bar (sticky bottom) ─── */}
