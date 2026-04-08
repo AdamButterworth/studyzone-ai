@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   MessageSquare,
@@ -23,7 +24,31 @@ import {
   ChevronDown,
   GripVertical,
   ArrowRight,
+  ZoomIn,
+  ZoomOut,
+  Maximize,
 } from "lucide-react";
+
+const PdfViewer = dynamic(() => import("@/components/app/PdfViewer"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex flex-col items-center gap-4">
+      {[1, 2].map((i) => (
+        <div
+          key={i}
+          className="animate-pulse rounded-xl bg-white"
+          style={{
+            width: "100%",
+            maxWidth: 720,
+            aspectRatio: "1 / 1.414",
+            boxShadow:
+              "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03)",
+          }}
+        />
+      ))}
+    </div>
+  ),
+});
 
 /* ─── Types ─── */
 
@@ -98,16 +123,6 @@ const TAB_OPTIONS: {
     iconColor: "text-peach/70",
   },
 ];
-
-/* ─── Mock document ─── */
-
-const MOCK_DOC = {
-  title: "Policy Gradient Methods",
-  type: "PDF",
-  subject: "Reinforcement Learning",
-  subjectSlug: "rl",
-  totalPages: 6,
-};
 
 /* ─── Mock tab data ─── */
 
@@ -198,222 +213,13 @@ const MOCK_SETS: SavedSet[] = [
   },
 ];
 
-/* ─── PDF Document ─── */
-
-function PdfDocument() {
-  return (
-    <div className="font-app text-[14px] leading-[1.85] tracking-[-0.008em] text-ink/88">
-      {/* Title block */}
-      <div className="mb-10">
-        <h1 className="font-serif text-[26px] font-semibold leading-[1.25] tracking-[-0.02em] text-ink">
-          Policy Gradient Methods in Reinforcement Learning
-        </h1>
-        <p className="mt-3 text-[13px] text-ink-muted">
-          CS 224R &mdash; Lecture Notes &ensp;|&ensp; Spring 2026
-        </p>
-        <div className="mt-6 h-px bg-gradient-to-r from-black/10 via-black/5 to-transparent" />
-      </div>
-
-      {/* 1. Introduction */}
-      <section className="mb-8">
-        <h2 className="mb-3 font-serif text-[18px] font-semibold text-ink">
-          1 &ensp;Introduction
-        </h2>
-        <p className="mb-3">
-          Policy gradient methods directly parameterize the policy{" "}
-          <span className="rounded bg-lavender-light/50 px-1.5 py-0.5 font-mono text-[12.5px]">
-            &pi;<sub>&theta;</sub>(a|s)
-          </span>{" "}
-          and optimize it by gradient ascent on the expected return. Unlike
-          value-based methods that derive policies indirectly from value
-          functions, policy gradient approaches work directly in policy space.
-        </p>
-        <p>
-          The core idea: adjust <strong>&theta;</strong> to increase the
-          probability of actions that lead to high returns. This makes them
-          particularly well-suited for <em>continuous action spaces</em> and
-          stochastic policies.
-        </p>
-      </section>
-
-      {/* 2. Policy Gradient Theorem */}
-      <section className="mb-8">
-        <h2 className="mb-3 font-serif text-[18px] font-semibold text-ink">
-          2 &ensp;The Policy Gradient Theorem
-        </h2>
-        <p className="mb-4">
-          The fundamental result{" "}
-          <span className="text-ink-light">(Sutton et al., 1999)</span> provides
-          a tractable expression for the gradient of the expected return:
-        </p>
-        <div className="my-5 rounded-xl bg-lavender-light/30 px-6 py-5 text-center">
-          <p className="font-mono text-[14px] tracking-wide text-ink/80">
-            &nabla;<sub>&theta;</sub> J(&theta;) &nbsp;=&nbsp; E<sub>&pi;</sub>[
-            &nbsp;&nabla;<sub>&theta;</sub> log &pi;<sub>&theta;</sub>(a|s)
-            &nbsp;&middot;&nbsp; Q<sup>&pi;</sup>(s,a) &nbsp;]
-          </p>
-        </div>
-        <p>
-          This allows computing gradients{" "}
-          <strong>
-            without differentiating through the environment dynamics
-          </strong>
-          . The term &nabla;<sub>&theta;</sub> log &pi;<sub>&theta;</sub>(a|s)
-          is called the <em>score function</em>.
-        </p>
-      </section>
-
-      {/* 3. REINFORCE */}
-      <section className="mb-8">
-        <h2 className="mb-3 font-serif text-[18px] font-semibold text-ink">
-          3 &ensp;REINFORCE
-        </h2>
-        <p className="mb-4">
-          The simplest policy gradient algorithm uses Monte Carlo returns as an
-          unbiased estimate of Q<sup>&pi;</sup>:
-        </p>
-        <div className="my-5 rounded-xl bg-lavender-light/30 px-6 py-5 text-center">
-          <p className="font-mono text-[14px] tracking-wide text-ink/80">
-            &nabla;<sub>&theta;</sub> J(&theta;) &nbsp;&asymp;&nbsp; &Sigma;
-            <sub>t</sub> &nabla;<sub>&theta;</sub> log &pi;<sub>&theta;</sub>(a
-            <sub>t</sub>|s<sub>t</sub>) &nbsp;&middot;&nbsp; G<sub>t</sub>
-          </p>
-        </div>
-        <p className="mb-4">
-          where G<sub>t</sub> is the discounted return from timestep t.
-        </p>
-
-        <div className="my-5 rounded-xl border border-black/5 bg-white px-6 py-5">
-          <p className="mb-3 text-[13px] font-semibold uppercase tracking-wider text-ink-muted">
-            Algorithm
-          </p>
-          <ol className="list-decimal space-y-2 pl-5 text-[13.5px]">
-            <li>
-              Sample a full trajectory &tau; using current policy &pi;
-              <sub>&theta;</sub>
-            </li>
-            <li>
-              Compute returns G<sub>t</sub> for each timestep
-            </li>
-            <li>
-              Update: &theta; &larr; &theta; + &alpha; &Sigma;<sub>t</sub>{" "}
-              &nabla;<sub>&theta;</sub> log &pi;<sub>&theta;</sub>(a
-              <sub>t</sub>|s<sub>t</sub>) G<sub>t</sub>
-            </li>
-          </ol>
-        </div>
-
-        <p className="rounded-lg border-l-[3px] border-amber/40 bg-amber-light/30 px-4 py-3 text-[13px] text-ink-light italic">
-          Limitation: High variance in gradient estimates due to full Monte
-          Carlo returns.
-        </p>
-      </section>
-
-      {/* 4. Baselines */}
-      <section className="mb-8">
-        <h2 className="mb-3 font-serif text-[18px] font-semibold text-ink">
-          4 &ensp;Variance Reduction with Baselines
-        </h2>
-        <p className="mb-4">
-          Subtract a state-dependent baseline b(s) to reduce variance without
-          introducing bias. The optimal baseline is approximately V
-          <sup>&pi;</sup>(s), leading to the{" "}
-          <strong>advantage function</strong>:
-        </p>
-        <div className="my-5 rounded-xl bg-lavender-light/30 px-6 py-5 text-center">
-          <p className="font-mono text-[14px] tracking-wide text-ink/80">
-            A<sup>&pi;</sup>(s,a) &nbsp;=&nbsp; Q<sup>&pi;</sup>(s,a)
-            &nbsp;&minus;&nbsp; V<sup>&pi;</sup>(s)
-          </p>
-        </div>
-        <p>
-          This measures how much better action <em>a</em> is compared to the
-          average action from state <em>s</em>.
-        </p>
-      </section>
-
-      {/* 5. Actor-Critic */}
-      <section className="mb-8">
-        <h2 className="mb-3 font-serif text-[18px] font-semibold text-ink">
-          5 &ensp;Actor-Critic Methods
-        </h2>
-        <p className="mb-4">
-          Replace Monte Carlo returns with a learned value function:
-        </p>
-        <ul className="mb-4 space-y-2 pl-1">
-          <li className="flex items-start gap-2.5">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/40" />
-            <span>
-              <strong>Actor:</strong> policy &pi;<sub>&theta;</sub>(a|s) &mdash;
-              selects actions
-            </span>
-          </li>
-          <li className="flex items-start gap-2.5">
-            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/40" />
-            <span>
-              <strong>Critic:</strong> value function V<sub>&phi;</sub>(s)
-              &mdash; evaluates states
-            </span>
-          </li>
-        </ul>
-        <p>
-          The critic provides lower-variance advantage estimates, enabling
-          faster and more stable learning. A2C uses the TD error as an advantage
-          estimate.
-        </p>
-      </section>
-
-      {/* 6. PPO */}
-      <section className="mb-8">
-        <h2 className="mb-3 font-serif text-[18px] font-semibold text-ink">
-          6 &ensp;Proximal Policy Optimization (PPO)
-        </h2>
-        <p className="mb-4">
-          PPO{" "}
-          <span className="text-ink-light">(Schulman et al., 2017)</span> is the
-          most widely-used policy gradient algorithm. It prevents destructively
-          large policy updates by <strong>clipping the probability ratio</strong>
-          :
-        </p>
-        <div className="my-5 rounded-xl bg-lavender-light/30 px-6 py-5 text-center">
-          <p className="font-mono text-[13px] tracking-wide text-ink/80">
-            L(&theta;) = E[ min( r<sub>t</sub>(&theta;)&Acirc;<sub>t</sub>,
-            &ensp;clip(r<sub>t</sub>(&theta;), 1&minus;&epsilon;,
-            1+&epsilon;)&Acirc;<sub>t</sub> ) ]
-          </p>
-        </div>
-        <p className="mb-3">Key properties:</p>
-        <ul className="space-y-2 pl-1">
-          {[
-            "Simple to implement (no second-order methods needed)",
-            "Good sample efficiency with mini-batch updates",
-            "Robust across many environments and hyperparameter settings",
-            "Used to train ChatGPT and other large language models via RLHF",
-          ].map((item, i) => (
-            <li key={i} className="flex items-start gap-2.5">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/40" />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* Page footer */}
-      <div className="mt-12 flex items-center justify-between border-t border-black/6 pt-4 text-[11px] text-ink-muted/40">
-        <span>CS 224R &mdash; Policy Gradient Methods</span>
-        <span>Page 1 of 6</span>
-      </div>
-    </div>
-  );
-}
-
 /* ═══════════════════════════════════════ */
 /* ─── Main Component ─── */
 /* ═══════════════════════════════════════ */
 
 export default function DocumentPage() {
   const params = useParams();
-  const doc = MOCK_DOC;
+  const subjectId = params.id as string;
 
   /* ── Resizable panel ── */
   const [rightWidth, setRightWidth] = useState(480);
@@ -492,7 +298,29 @@ export default function DocumentPage() {
   const [notes, setNotes] = useState("");
   const [homeQuery, setHomeQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [scrollToPage, setScrollToPage] = useState<number | undefined>();
+  const [zoom, setZoom] = useState(1);
+  const [pdfBaseWidth, setPdfBaseWidth] = useState(0);
+  const pdfScrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2.5;
+  const ZOOM_STEP = 0.15;
+
+  // Measure the scroll container width — stable regardless of content size
+  useEffect(() => {
+    if (!pdfScrollRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // Use clientWidth to exclude scrollbar width, subtract padding (px-4 = 32px)
+        setPdfBaseWidth(entry.target.clientWidth - 32);
+      }
+    });
+    observer.observe(pdfScrollRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -540,6 +368,16 @@ export default function DocumentPage() {
     }, 1200);
   };
 
+  const handlePageChange = useCallback((page: number, total: number) => {
+    setCurrentPage(page);
+    setTotalPages(total);
+  }, []);
+
+  const goToPage = (page: number) => {
+    setScrollToPage(page);
+    setCurrentPage(page);
+  };
+
   const doneCount = lessonSteps.filter((s) => s.done).length;
 
   return (
@@ -554,14 +392,14 @@ export default function DocumentPage() {
         <div className="flex shrink-0 items-center justify-between bg-white/80 px-5 py-2.5 backdrop-blur-sm">
           <div className="flex items-center gap-2 text-[13px]">
             <a
-              href={`/subject/${doc.subjectSlug}`}
+              href={`/subject/${subjectId}`}
               className="flex items-center gap-1.5 font-app text-ink-muted transition-colors hover:text-ink"
             >
               <ArrowLeft size={14} />
-              {doc.subject}
+              Back
             </a>
             <span className="text-ink-muted/40">/</span>
-            <span className="font-app font-medium">{doc.title}</span>
+            <span className="font-app font-medium">Document</span>
           </div>
           <div className="flex items-center gap-1">
             <button className="rounded-lg p-2 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink">
@@ -586,42 +424,61 @@ export default function DocumentPage() {
           <div className="mx-1 h-4 w-px bg-black/8" />
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              onClick={() => goToPage(Math.max(1, currentPage - 1))}
               disabled={currentPage <= 1}
               className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
             >
               <ChevronLeft size={13} />
             </button>
             <span className="font-app text-[12px] tabular-nums text-ink-light">
-              {currentPage} / {doc.totalPages}
+              {totalPages > 0 ? `${currentPage} / ${totalPages}` : "—"}
             </span>
             <button
-              onClick={() => setCurrentPage((p) => Math.min(doc.totalPages, p + 1))}
-              disabled={currentPage >= doc.totalPages}
+              onClick={() => goToPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
               className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
             >
               <ChevronRight size={13} />
             </button>
           </div>
           <div className="mx-1 h-4 w-px bg-black/8" />
-          <button className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-app text-[12px] text-ink-muted transition-colors hover:bg-black/5 hover:text-ink">
-            Page fit
-            <ChevronDown size={11} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
+              disabled={zoom <= ZOOM_MIN}
+              className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
+            >
+              <ZoomOut size={13} />
+            </button>
+            <span className="font-app text-[12px] tabular-nums text-ink-light w-10 text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <button
+              onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
+              disabled={zoom >= ZOOM_MAX}
+              className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
+            >
+              <ZoomIn size={13} />
+            </button>
+            <button
+              onClick={() => setZoom(1)}
+              className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink ml-0.5"
+              title="Fit to width"
+            >
+              <Maximize size={13} />
+            </button>
+          </div>
         </div>
 
         {/* Document content */}
-        <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div
-            className="mx-auto max-w-[720px] rounded-xl bg-white px-14 py-12"
-            style={{
-              boxShadow:
-                "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03)",
-            }}
-          >
-            <PdfDocument />
-          </div>
-          <div className="h-6" />
+        <div ref={pdfScrollRef} className="flex-1 overflow-y-auto overflow-x-auto px-4 py-4">
+          <PdfViewer
+            url="/sample.pdf"
+            onPageChange={handlePageChange}
+            currentPage={scrollToPage}
+            pageWidth={pdfBaseWidth > 0 ? pdfBaseWidth * zoom : undefined}
+          />
+          <div className="h-4" />
         </div>
       </div>
 
