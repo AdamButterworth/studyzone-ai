@@ -50,17 +50,34 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   useEffect(() => {
     if (authLoading || !user) return;
 
-    const fetchSidebar = async () => {
-      const { data: subjectsData, error: subjectsError } = await supabase
+    const querySubjects = async () => {
+      const { data, error: err } = await supabase
         .from("subjects")
         .select("id, name, icon")
         .eq("user_id", user.id)
         .order("position")
         .order("created_at", { ascending: false });
 
+      if (err && (err.code === "PGRST301" || err.message?.includes("JWT"))) {
+        console.error("Sidebar subjects auth error, refreshing:", err.code);
+        await supabase.auth.refreshSession();
+        return supabase
+          .from("subjects")
+          .select("id, name, icon")
+          .eq("user_id", user.id)
+          .order("position")
+          .order("created_at", { ascending: false });
+      }
+      return { data, error: err };
+    };
+
+    const fetchSidebar = async () => {
+      const { data: subjectsData, error: subjectsError } = await querySubjects();
+
       if (subjectsError) {
-        console.error("Sidebar subjects error:", subjectsError.code, subjectsError.message);
+        console.error("Sidebar subjects error:", { userId: user.id, code: subjectsError.code, message: subjectsError.message });
       } else if (subjectsData) {
+        console.log("Sidebar subjects loaded:", { userId: user.id, count: subjectsData.length });
         const withCounts = await Promise.all(
           subjectsData.map(async (s) => {
             const { count } = await supabase
@@ -82,7 +99,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
         .limit(4);
 
       if (recentsError) {
-        console.error("Sidebar recents error:", recentsError.code, recentsError.message);
+        console.error("Sidebar recents error:", { userId: user.id, code: recentsError.code, message: recentsError.message });
       } else if (recentsData) {
         setRecentDocs(recentsData);
       }

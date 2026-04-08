@@ -38,6 +38,7 @@ export default function AppDashboard() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [recents, setRecents] = useState<RecentDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
   const router = useRouter();
@@ -49,23 +50,50 @@ export default function AppDashboard() {
       return;
     }
 
+    const fetchSubjects = async () => {
+      const { data, error: err } = await supabase
+        .from("subjects")
+        .select("id, name, icon, description, updated_at")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+
+      if (err) {
+        console.error("Subjects query failed:", { userId: user.id, code: err.code, message: err.message });
+
+        // Auth error — try refreshing session once and retry
+        if (err.code === "PGRST301" || err.message?.includes("JWT")) {
+          console.log("Attempting session refresh...");
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error("Session refresh failed:", refreshError.message);
+            return null;
+          }
+          const { data: retryData, error: retryError } = await supabase
+            .from("subjects")
+            .select("id, name, icon, description, updated_at")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false });
+
+          if (retryError) {
+            console.error("Subjects retry failed:", retryError.code, retryError.message);
+            return null;
+          }
+          return retryData;
+        }
+        return null;
+      }
+      return data;
+    };
+
     const fetchData = async () => {
       try {
-        // Fetch subjects
-        const { data: subjectsData, error: subjectsError } = await supabase
-          .from("subjects")
-          .select("id, name, icon, description, updated_at")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false });
+        const subjectsData = await fetchSubjects();
+        console.log("Subjects loaded:", { userId: user.id, count: subjectsData?.length ?? 0 });
 
-        if (subjectsError) {
-          console.error("Subjects fetch error:", subjectsError.code, subjectsError.message);
-          if (subjectsError.code === "PGRST301" || subjectsError.message?.includes("JWT")) {
-            window.location.assign("/login");
-            return;
-          }
-        } else if (subjectsData) {
+        if (subjectsData) {
           setSubjects(subjectsData.map((s) => ({ ...s, document_count: 0 })));
+        } else {
+          setError("Failed to load subjects");
         }
 
         // Fetch recent documents
@@ -78,7 +106,7 @@ export default function AppDashboard() {
           .limit(5);
 
         if (recentsError) {
-          console.error("Recents fetch error:", recentsError.code, recentsError.message);
+          console.error("Recents query failed:", { userId: user.id, code: recentsError.code, message: recentsError.message });
         } else if (recentsData) {
           setRecents(
             recentsData.map((d: any) => ({
@@ -92,6 +120,7 @@ export default function AppDashboard() {
         }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
+        setError("Something went wrong loading your data");
       } finally {
         setLoading(false);
       }
@@ -209,6 +238,19 @@ export default function AppDashboard() {
                 <div className="mt-2 h-3 w-1/2 rounded bg-cream-dark" />
               </div>
             ))}
+
+          {/* Error state */}
+          {error && !loading && subjects.length === 0 && (
+            <div className="col-span-full rounded-2xl border border-red-200/60 bg-red-50/50 px-4 py-6 text-center">
+              <p className="text-sm text-red-600/80">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-xs text-red-500 underline hover:text-red-700"
+              >
+                Retry
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
