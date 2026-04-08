@@ -37,23 +37,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
   useEffect(() => {
-    console.log("[Auth] useEffect fired");
-
     const init = async () => {
-      console.log("[Auth] init called");
       try {
-        console.log("[Auth] calling getSession...");
-        const result = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error("getSession timeout")), 5000))
-        ]) as any;
+        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
 
-        const session = result?.data?.session;
-        const sessionError = result?.error;
-
-        console.log("[Auth] session:", !!session, "user:", session?.user?.id, "error:", sessionError);
-
-        const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
@@ -62,8 +49,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .select("*")
             .eq("id", currentUser.id)
             .single();
-
-          console.log("[Auth] profile:", data, "error:", profileError);
 
           if (!profileError && data) {
             setProfile(data);
