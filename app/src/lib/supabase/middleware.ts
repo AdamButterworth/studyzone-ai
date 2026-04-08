@@ -29,9 +29,24 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Use getUser to refresh session and validate
+  // If it fails, fall back to checking if auth cookies exist
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  return { supabaseResponse, user };
+    return { supabaseResponse, user };
+  } catch {
+    // If getUser fails (network issue, timeout), check if auth cookie exists
+    // This prevents redirect loops when Supabase API is slow/down
+    const hasAuthCookie = request.cookies
+      .getAll()
+      .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+
+    return {
+      supabaseResponse,
+      user: hasAuthCookie ? ({} as any) : null,
+    };
+  }
 }
