@@ -661,6 +661,9 @@ export default function DocumentPage() {
               onPageChange={handlePageChange}
               currentPage={scrollToPage}
               pageWidth={pdfBaseWidth > 0 ? pdfBaseWidth * zoom : undefined}
+              renderAllPages={searchOpen || searchQuery.trim().length > 0}
+              initialRenderCount={3}
+              renderBatchSize={4}
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center">
