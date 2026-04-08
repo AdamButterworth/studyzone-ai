@@ -42,6 +42,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   const [subjects, setSubjects] = useState<SidebarSubject[]>([]);
   const [recentDocs, setRecentDocs] = useState<RecentDoc[]>([]);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const fetchedFor = useRef<string | null>(null);
   const { user, profile, loading: authLoading, signOut } = useAuth();
   const supabase = createClient();
   const router = useRouter();
@@ -49,30 +50,18 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   // Fetch subjects and recents
   useEffect(() => {
     if (authLoading || !user) return;
+    if (fetchedFor.current === user.id) return;
+    fetchedFor.current = user.id;
 
-    const querySubjects = async () => {
-      const { data, error: err } = await supabase
+    console.log("Sidebar fetch starting:", { userId: user.id, authLoading });
+
+    const fetchSidebar = async () => {
+      const { data: subjectsData, error: subjectsError } = await supabase
         .from("subjects")
         .select("id, name, icon")
         .eq("user_id", user.id)
         .order("position")
         .order("created_at", { ascending: false });
-
-      if (err && (err.code === "PGRST301" || err.message?.includes("JWT"))) {
-        console.error("Sidebar subjects auth error, refreshing:", err.code);
-        await supabase.auth.refreshSession();
-        return supabase
-          .from("subjects")
-          .select("id, name, icon")
-          .eq("user_id", user.id)
-          .order("position")
-          .order("created_at", { ascending: false });
-      }
-      return { data, error: err };
-    };
-
-    const fetchSidebar = async () => {
-      const { data: subjectsData, error: subjectsError } = await querySubjects();
 
       if (subjectsError) {
         console.error("Sidebar subjects error:", { userId: user.id, code: subjectsError.code, message: subjectsError.message });

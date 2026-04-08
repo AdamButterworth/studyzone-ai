@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -31,10 +31,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const profileFetchedFor = useRef<string | null>(null);
 
   const supabase = createClient();
 
   const loadProfile = useCallback(async (userId: string) => {
+    // Deduplicate: skip if we already fetched/are fetching for this user
+    if (profileFetchedFor.current === userId) return;
+    profileFetchedFor.current = userId;
+
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -55,26 +60,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase]);
 
   useEffect(() => {
+    let mounted = true;
+
     const init = async () => {
       try {
-        const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
+        // getSession() reads from cookies — instant, no network call
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-        if (userError) {
-          console.error("Auth bootstrap error:", userError.message);
+        if (sessionError) {
+          console.error("Auth bootstrap error:", sessionError.message);
         }
 
-        console.log("Auth bootstrap:", verifiedUser ? `user ${verifiedUser.id}` : "no session");
-        setUser(verifiedUser);
+        const sessionUser = session?.user ?? null;
+        console.log("Auth bootstrap:", sessionUser?.id ?? "no session");
 
-        if (verifiedUser) {
-          await loadProfile(verifiedUser.id);
+        if (mounted) {
+          setUser(sessionUser);
+          setLoading(false); // Unblock data fetches immediately
+
+          // Fetch profile in background (non-blocking)
+          if (sessionUser) {
+            loadProfile(sessionUser.id);
+          }
         }
       } catch (err) {
         console.error("Auth init error:", err);
-      } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
+
+    // Safety: if bootstrap hangs, force loading=false after 4s
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn("Auth bootstrap timeout — forcing loading=false");
+        setLoading(false);
+      }
+    }, 4000);
 
     init();
 
@@ -84,23 +105,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const currentUser = session?.user ?? null;
       console.log("Auth state change:", event, currentUser?.id ?? "no user");
 
+      if (!mounted) return;
+
       setUser(currentUser);
+      setLoading(false);
 
       if (currentUser) {
-        await loadProfile(currentUser.id);
+        // Reset dedup ref on SIGNED_IN so profile re-fetches for new user
+        if (event === "SIGNED_IN") {
+          profileFetchedFor.current = null;
+        }
+        loadProfile(currentUser.id);
       } else {
+        profileFetchedFor.current = null;
         setProfile(null);
       }
-
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = async () => {
     setUser(null);
     setProfile(null);
+    profileFetchedFor.current = null;
     try {
       await fetch("/auth/signout", { method: "POST" });
     } catch (err) {

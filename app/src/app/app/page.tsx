@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, Link, ClipboardPaste, Plus, Clock, ArrowRight, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -39,6 +39,7 @@ export default function AppDashboard() {
   const [recents, setRecents] = useState<RecentDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fetchedFor = useRef<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
   const router = useRouter();
@@ -50,50 +51,27 @@ export default function AppDashboard() {
       return;
     }
 
-    const fetchSubjects = async () => {
-      const { data, error: err } = await supabase
-        .from("subjects")
-        .select("id, name, icon, description, updated_at")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false });
+    // Prevent duplicate fetches from rapid auth events
+    if (fetchedFor.current === user.id) return;
+    fetchedFor.current = user.id;
 
-      if (err) {
-        console.error("Subjects query failed:", { userId: user.id, code: err.code, message: err.message });
-
-        // Auth error — try refreshing session once and retry
-        if (err.code === "PGRST301" || err.message?.includes("JWT")) {
-          console.log("Attempting session refresh...");
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError) {
-            console.error("Session refresh failed:", refreshError.message);
-            return null;
-          }
-          const { data: retryData, error: retryError } = await supabase
-            .from("subjects")
-            .select("id, name, icon, description, updated_at")
-            .eq("user_id", user.id)
-            .order("updated_at", { ascending: false });
-
-          if (retryError) {
-            console.error("Subjects retry failed:", retryError.code, retryError.message);
-            return null;
-          }
-          return retryData;
-        }
-        return null;
-      }
-      return data;
-    };
+    console.log("Dashboard fetch starting:", { userId: user.id, authLoading });
 
     const fetchData = async () => {
       try {
-        const subjectsData = await fetchSubjects();
-        console.log("Subjects loaded:", { userId: user.id, count: subjectsData?.length ?? 0 });
+        // Fetch subjects
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from("subjects")
+          .select("id, name, icon, description, updated_at")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false });
 
-        if (subjectsData) {
-          setSubjects(subjectsData.map((s) => ({ ...s, document_count: 0 })));
-        } else {
+        if (subjectsError) {
+          console.error("Subjects query failed:", { userId: user.id, code: subjectsError.code, message: subjectsError.message });
           setError("Failed to load subjects");
+        } else {
+          console.log("Subjects loaded:", { userId: user.id, count: subjectsData?.length ?? 0 });
+          setSubjects((subjectsData ?? []).map((s) => ({ ...s, document_count: 0 })));
         }
 
         // Fetch recent documents
