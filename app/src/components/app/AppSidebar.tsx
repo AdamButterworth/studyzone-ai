@@ -51,14 +51,16 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
     if (authLoading || !user) return;
 
     const fetchSidebar = async () => {
-      const { data: subjectsData } = await supabase
+      const { data: subjectsData, error: subjectsError } = await supabase
         .from("subjects")
         .select("id, name, icon")
         .eq("user_id", user.id)
         .order("position")
         .order("created_at", { ascending: false });
 
-      if (subjectsData) {
+      if (subjectsError) {
+        console.error("Sidebar subjects error:", subjectsError.code, subjectsError.message);
+      } else if (subjectsData) {
         const withCounts = await Promise.all(
           subjectsData.map(async (s) => {
             const { count } = await supabase
@@ -71,7 +73,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
         setSubjects(withCounts);
       }
 
-      const { data: recentsData } = await supabase
+      const { data: recentsData, error: recentsError } = await supabase
         .from("documents")
         .select("id, title, subject_id")
         .eq("user_id", user.id)
@@ -79,7 +81,11 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
         .order("last_viewed_at", { ascending: false })
         .limit(4);
 
-      if (recentsData) setRecentDocs(recentsData);
+      if (recentsError) {
+        console.error("Sidebar recents error:", recentsError.code, recentsError.message);
+      } else if (recentsData) {
+        setRecentDocs(recentsData);
+      }
     };
 
     fetchSidebar();

@@ -59,7 +59,11 @@ export default function AppDashboard() {
           .order("updated_at", { ascending: false });
 
         if (subjectsError) {
-          console.error("Subjects fetch error:", subjectsError);
+          console.error("Subjects fetch error:", subjectsError.code, subjectsError.message);
+          if (subjectsError.code === "PGRST301" || subjectsError.message?.includes("JWT")) {
+            window.location.assign("/login");
+            return;
+          }
         } else if (subjectsData) {
           setSubjects(subjectsData.map((s) => ({ ...s, document_count: 0 })));
         }
@@ -74,7 +78,7 @@ export default function AppDashboard() {
           .limit(5);
 
         if (recentsError) {
-          console.error("Recents fetch error:", recentsError);
+          console.error("Recents fetch error:", recentsError.code, recentsError.message);
         } else if (recentsData) {
           setRecents(
             recentsData.map((d: any) => ({

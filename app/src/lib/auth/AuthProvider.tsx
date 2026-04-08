@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
@@ -32,7 +31,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
 
   const supabase = createClient();
 
@@ -59,18 +57,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const init = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
 
-        if (sessionError) {
-          console.error("Session bootstrap error:", sessionError.message);
+        if (userError) {
+          console.error("Auth bootstrap error:", userError.message);
         }
 
-        const currentUser = session?.user ?? null;
-        console.log("Auth bootstrap:", currentUser ? `user ${currentUser.id}` : "no session");
-        setUser(currentUser);
+        console.log("Auth bootstrap:", verifiedUser ? `user ${verifiedUser.id}` : "no session");
+        setUser(verifiedUser);
 
-        if (currentUser) {
-          await loadProfile(currentUser.id);
+        if (verifiedUser) {
+          await loadProfile(verifiedUser.id);
         }
       } catch (err) {
         console.error("Auth init error:", err);
@@ -84,9 +81,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state change:", event, session?.user?.id ?? "no user");
-
       const currentUser = session?.user ?? null;
+      console.log("Auth state change:", event, currentUser?.id ?? "no user");
+
       setUser(currentUser);
 
       if (currentUser) {
@@ -102,10 +99,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signOut = async () => {
-    await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
-    router.push("/login");
+    try {
+      await fetch("/auth/signout", { method: "POST" });
+    } catch (err) {
+      console.error("Sign out error:", err);
+    }
+    window.location.assign("/login");
   };
 
   return (
