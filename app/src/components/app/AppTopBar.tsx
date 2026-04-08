@@ -1,7 +1,6 @@
 "use client";
 
 import { Search, PanelLeft } from "lucide-react";
-import { useAuth } from "@/lib/auth/AuthProvider";
 
 interface AppTopBarProps {
   sidebarOpen: boolean;
@@ -9,8 +8,6 @@ interface AppTopBarProps {
 }
 
 export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarProps) {
-  const { profile } = useAuth();
-
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 px-4">
       {/* Sidebar toggle */}
@@ -35,21 +32,14 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
 
       {/* Search bar */}
       <div className="flex flex-1 justify-center">
-        <div className="flex w-full max-w-lg items-center gap-2 rounded-xl border border-black/5 bg-white/60 px-4 py-2 transition-colors focus-within:border-black/10 focus-within:bg-white">
+        <label className="flex w-full max-w-lg cursor-text items-center gap-2 rounded-xl border border-black/5 bg-white/60 px-4 py-2 transition-colors focus-within:border-black/10 focus-within:bg-white">
           <Search size={15} className="shrink-0 text-ink-muted" />
           <input
             type="text"
             placeholder="Search or learn anything..."
             className="w-full bg-transparent text-sm outline-none placeholder:text-ink-muted"
           />
-        </div>
-      </div>
-
-      {/* Right actions */}
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#5B8DEF] text-xs font-bold text-white">
-          {profile?.first_name?.[0]?.toUpperCase() || "?"}
-        </div>
+        </label>
       </div>
     </header>
   );

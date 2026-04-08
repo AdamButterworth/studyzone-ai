@@ -30,7 +30,7 @@ export default function AppDashboard() {
 
       {/* Search / topic bar */}
       <div className="mt-8">
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-5 py-4 shadow-sm transition-colors focus-within:border-black/20 focus-within:shadow-md">
+        <label className="flex cursor-text items-center gap-3 rounded-2xl border border-black/10 bg-white px-5 py-4 shadow-sm transition-colors focus-within:border-black/20 focus-within:shadow-md">
           <Search size={20} className="shrink-0 text-ink-muted" />
           <input
             type="text"
@@ -40,7 +40,7 @@ export default function AppDashboard() {
           <button className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink text-white transition-colors hover:bg-ink/80">
             <ArrowRight size={16} />
           </button>
-        </div>
+        </label>
       </div>
 
       {/* Upload options — secondary */}

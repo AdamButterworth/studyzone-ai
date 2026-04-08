@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus,
   Search,
@@ -35,7 +35,20 @@ const subjects = [
 export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   const [recentsOpen, setRecentsOpen] = useState(true);
   const [subjectsOpen, setSubjectsOpen] = useState(true);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const { profile, signOut } = useAuth();
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [userMenuOpen]);
 
   return (
     <aside className="font-app-sidebar relative flex h-full w-[280px] flex-col border-r border-black/5 bg-white">
@@ -172,23 +185,33 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
           </a>
 
           {/* User profile */}
-          <div className="mt-2 flex items-center gap-2.5 rounded-xl px-3 py-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#5B8DEF] text-xs font-bold text-white">
-              {profile?.first_name?.[0]?.toUpperCase() || "?"}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
-                {profile ? `${profile.first_name} ${profile.last_name?.[0] || ""}.` : "Loading..."}
-              </p>
-              <p className="text-[11px] text-ink-muted">Free Plan</p>
-            </div>
+          <div className="relative mt-2" ref={userMenuRef}>
             <button
-              onClick={signOut}
-              className="shrink-0 rounded-lg p-1.5 text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink"
-              title="Sign out"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 transition-colors hover:bg-cream-dark/50"
             >
-              <LogOut size={13} />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7C5CFC] to-[#5B8DEF] text-xs font-bold text-white">
+                {profile?.first_name?.[0]?.toUpperCase() || "?"}
+              </div>
+              <div className="min-w-0 flex-1 text-left">
+                <p className="truncate text-sm font-medium">
+                  {profile ? `${profile.first_name} ${profile.last_name?.[0] || ""}.` : "Loading..."}
+                </p>
+                <p className="text-[11px] text-ink-muted">Free Plan</p>
+              </div>
             </button>
+
+            {userMenuOpen && (
+              <div className="absolute bottom-full left-3 right-3 mb-1 rounded-xl border border-black/8 bg-white p-1 shadow-xl">
+                <button
+                  onClick={() => { setUserMenuOpen(false); signOut(); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-ink-light transition-colors hover:bg-cream-dark/50 hover:text-ink"
+                >
+                  <LogOut size={14} />
+                  Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

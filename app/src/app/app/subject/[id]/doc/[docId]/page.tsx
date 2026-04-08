@@ -802,7 +802,7 @@ export default function DocumentPage() {
 
               {/* Ask anything — organic pill input */}
               <div className="shrink-0 px-4 pb-4">
-                <div className="flex items-center rounded-full border border-black/8 bg-cream-dark/20 pr-3 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
+                <label className="flex cursor-text items-center rounded-full border border-black/8 bg-cream-dark/20 pr-3 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
                   <input
                     type="text"
                     value={homeQuery}
@@ -821,7 +821,7 @@ export default function DocumentPage() {
                   >
                     <ArrowRight size={13} />
                   </button>
-                </div>
+                </label>
               </div>
             </div>
           )}
@@ -852,7 +852,7 @@ export default function DocumentPage() {
               </div>
               {/* Chat input — organic pill */}
               <div className="shrink-0 px-4 pb-4 pt-2">
-                <div className="flex items-center gap-2 rounded-full border border-black/8 bg-cream-dark/20 px-4 py-2.5 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
+                <label className="flex cursor-text items-center gap-2 rounded-full border border-black/8 bg-cream-dark/20 px-4 py-2.5 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
                   <input
                     type="text"
                     value={chatInput}
@@ -873,7 +873,7 @@ export default function DocumentPage() {
                   >
                     <ArrowRight size={13} />
                   </button>
-                </div>
+                </label>
               </div>
             </>
           )}

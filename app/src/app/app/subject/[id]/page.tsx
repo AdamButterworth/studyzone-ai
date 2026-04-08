@@ -103,6 +103,8 @@ export default function SubjectPage() {
   const id = params.id as string;
 
   const subject = MOCK_SUBJECTS[id] || MOCK_SUBJECTS["new"];
+  const [subjectName, setSubjectName] = useState(subject.name);
+  const [subjectDesc, setSubjectDesc] = useState(subject.description);
   const [content, setContent] = useState<ContentItem[]>(subject.content);
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -183,24 +185,29 @@ export default function SubjectPage() {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2.5">
             <span className="text-xl">{subject.icon}</span>
-            <h1 className="font-app-heading text-[22px] tracking-tight">
-              {subject.name}
+            <div className="flex items-baseline gap-2">
+              <input
+                type="text"
+                value={subjectName}
+                onChange={(e) => setSubjectName(e.target.value)}
+                placeholder="Untitled Subject"
+                className="font-app-heading text-[22px] tracking-tight bg-transparent outline-none rounded-lg px-2 -mx-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 w-auto transition-colors"
+                style={{ width: `${Math.max(subjectName.length + 2, 10)}ch` }}
+              />
               {content.length > 0 && (
-                <span className="ml-2 text-[15px] font-normal text-ink-muted">
+                <span className="text-[15px] font-normal text-ink-muted">
                   ({content.length})
                 </span>
               )}
-            </h1>
+            </div>
           </div>
-          {subject.description ? (
-            <p className="mt-1 ml-[34px] font-app text-[13px] text-ink-muted">
-              {subject.description}
-            </p>
-          ) : (
-            <p className="mt-1 ml-[34px] font-app text-[13px] text-ink-muted/50 italic">
-              Add a description...
-            </p>
-          )}
+          <input
+            type="text"
+            value={subjectDesc}
+            onChange={(e) => setSubjectDesc(e.target.value)}
+            placeholder="Add a description..."
+            className="mt-1 ml-[30px] font-app text-[13px] text-ink-muted bg-transparent outline-none rounded-lg px-2 py-0.5 border border-transparent hover:border-black/8 focus:border-black/15 focus:bg-white/60 placeholder:text-ink-muted/40 placeholder:italic w-full transition-colors"
+          />
         </div>
 
         <div className="flex items-center gap-2">
@@ -296,10 +303,7 @@ export default function SubjectPage() {
         {isEmpty ? (
           /* ─── Empty State ─── */
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-black/10">
-              <Plus size={24} strokeWidth={1.5} className="text-ink-muted" />
-            </div>
-            <h2 className="font-app-heading mt-5 text-[17px]">
+            <h2 className="font-app-heading text-[22px]">
               Add content to this subject
             </h2>
             <p className="mt-2 max-w-sm font-app text-[13px] leading-relaxed text-ink-muted">
@@ -440,7 +444,7 @@ export default function SubjectPage() {
         <div className="pointer-events-none h-8 bg-gradient-to-t from-[#FAF7F4] to-transparent" />
         <div className="bg-[#FAF7F4] px-1 pb-3">
           <div className="mx-auto max-w-2xl">
-            <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition-all focus-within:border-black/18 focus-within:shadow-md">
+            <label className="flex cursor-text items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition-all focus-within:border-black/18 focus-within:shadow-md">
               <Sparkles size={16} className="shrink-0 text-ink-muted/60" />
               <input
                 type="text"
@@ -458,7 +462,7 @@ export default function SubjectPage() {
               >
                 <ArrowRight size={14} />
               </button>
-            </div>
+            </label>
             <p className="mt-2 text-center font-app text-[11px] text-ink-muted/50">
               Ask a question, start a guided lesson, or get quizzed on your
               materials
@@ -491,7 +495,7 @@ export default function SubjectPage() {
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(e) => { e.preventDefault(); setDragOver(false); /* handle files */ }}
-              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
+              className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
                 dragOver
                   ? "border-ink/30 bg-cream-dark/40"
                   : "border-black/10 bg-cream-dark/15"
