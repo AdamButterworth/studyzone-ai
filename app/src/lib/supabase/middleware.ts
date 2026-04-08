@@ -29,17 +29,10 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session (best effort — don't block on failure)
-  try {
-    await supabase.auth.getUser();
-  } catch {
-    // Ignore — token refresh failed, client will handle it
-  }
+  // Derive auth state from actual session, not cookie name matching
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Use cookie existence for access control (no network dependency)
-  const hasAuthCookie = request.cookies
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
-
-  return { supabaseResponse, hasAuthCookie };
+  return { supabaseResponse, isAuthenticated: !!user };
 }

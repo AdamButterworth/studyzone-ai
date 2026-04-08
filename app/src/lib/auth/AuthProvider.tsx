@@ -41,6 +41,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
 
+        if (userError) {
+          console.error("Auth getUser error:", userError.message);
+        }
+
         setUser(currentUser);
 
         if (currentUser) {
