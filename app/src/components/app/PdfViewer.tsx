@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -43,12 +43,92 @@ function PageError({ width }: { width?: number }) {
   );
 }
 
+interface BufferedPdfPageProps {
+  pageNumber: number;
+  pageWidth?: number;
+  pageRef?: (el: HTMLDivElement | null) => void;
+}
+
+function BufferedPdfPage({
+  pageNumber,
+  pageWidth,
+  pageRef,
+}: BufferedPdfPageProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const previousWidthRef = useRef<number | undefined>(pageWidth);
+  const [snapshotSrc, setSnapshotSrc] = useState<string | null>(null);
+  const [hasRenderedOnce, setHasRenderedOnce] = useState(false);
+
+  useLayoutEffect(() => {
+    const previousWidth = previousWidthRef.current;
+
+    if (
+      typeof previousWidth === "number" &&
+      typeof pageWidth === "number" &&
+      Math.abs(previousWidth - pageWidth) > 0.5
+    ) {
+      const canvas = wrapperRef.current?.querySelector("canvas");
+
+      if (canvas instanceof HTMLCanvasElement && canvas.width > 0) {
+        try {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setSnapshotSrc(canvas.toDataURL("image/png"));
+        } catch {
+          setSnapshotSrc(null);
+        }
+      }
+    }
+
+    previousWidthRef.current = pageWidth;
+  }, [pageWidth]);
+
+  const clearSnapshot = useCallback(() => {
+    setHasRenderedOnce(true);
+    setSnapshotSrc(null);
+  }, []);
+
+  const showLoadingSkeleton = !hasRenderedOnce && !snapshotSrc;
+
+  return (
+    <div
+      ref={(el) => {
+        wrapperRef.current = el;
+        pageRef?.(el);
+      }}
+      data-page={pageNumber}
+      className="relative overflow-hidden rounded-lg bg-white"
+      style={{ boxShadow: PAGE_SHADOW }}
+    >
+      {snapshotSrc && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={snapshotSrc}
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 h-full w-full select-none"
+        />
+      )}
+      <Page
+        pageNumber={pageNumber}
+        width={pageWidth || undefined}
+        renderTextLayer={true}
+        renderAnnotationLayer={true}
+        onRenderSuccess={clearSnapshot}
+        onRenderError={clearSnapshot}
+        loading={showLoadingSkeleton ? <PageSkeleton width={pageWidth} /> : null}
+        error={<PageError width={pageWidth} />}
+      />
+    </div>
+  );
+}
+
 /* ─── Props ─── */
 interface PdfViewerProps {
   url: string;
   onPageChange?: (page: number, total: number) => void;
   currentPage?: number;
   pageWidth?: number;
+  displayScale?: number;
   renderAllPages?: boolean;
   initialRenderCount?: number;
   renderBatchSize?: number;
@@ -59,15 +139,18 @@ export default function PdfViewer({
   onPageChange,
   currentPage: controlledPage,
   pageWidth,
+  displayScale = 1,
   renderAllPages = false,
   initialRenderCount = 3,
   renderBatchSize = 4,
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0);
   const [visiblePages, setVisiblePages] = useState(0);
+  const [contentSize, setContentSize] = useState({ width: 0, height: 0 });
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const scrollingToPage = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   /* ── Document loaded ── */
   const onDocumentLoadSuccess = useCallback(
@@ -84,6 +167,7 @@ export default function PdfViewer({
   /* ── When renderAllPages flips to true (search opened), show all ── */
   useEffect(() => {
     if (renderAllPages && numPages > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisiblePages(numPages);
     }
   }, [renderAllPages, numPages]);
@@ -134,6 +218,7 @@ export default function PdfViewer({
 
     // Expand visible range if needed
     if (controlledPage > visiblePages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setVisiblePages(Math.min(controlledPage + renderBatchSize, numPages));
     }
 
@@ -160,10 +245,49 @@ export default function PdfViewer({
     []
   );
 
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+
+    const updateSize = () => {
+      setContentSize({
+        width: content.offsetWidth,
+        height: content.offsetHeight,
+      });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  const liveScale =
+    Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1;
+  const renderCatchupScale =
+    typeof pageWidth === "number" &&
+    pageWidth > 0 &&
+    contentSize.width > 0
+      ? pageWidth / contentSize.width
+      : 1;
+  const effectiveScale = liveScale * renderCatchupScale;
+  const scaledWidth =
+    typeof pageWidth === "number" && pageWidth > 0
+      ? pageWidth * liveScale
+      : contentSize.width > 0
+        ? contentSize.width * effectiveScale
+        : undefined;
+  const scaledHeight =
+    contentSize.height > 0 ? contentSize.height * effectiveScale : undefined;
+
   return (
     <div
       className="flex flex-col items-center"
-      style={{ minWidth: "fit-content" }}
+      style={{ minWidth: scaledWidth || "fit-content" }}
     >
       <Document
         file={url}
@@ -186,32 +310,36 @@ export default function PdfViewer({
           </div>
         }
       >
-        <div className="flex flex-col items-center gap-3">
-          {Array.from({ length: visiblePages }, (_, i) => (
-            <div
-              key={i + 1}
-              ref={setPageRef(i + 1)}
-              data-page={i + 1}
-              className="rounded-lg bg-white overflow-hidden"
-              style={{ boxShadow: PAGE_SHADOW }}
-            >
-              <Page
+        <div
+          className="relative"
+          style={{ width: scaledWidth, height: scaledHeight }}
+        >
+          <div
+            ref={contentRef}
+            className="absolute left-0 top-0 flex flex-col items-center gap-3"
+            style={{
+              transform:
+                effectiveScale === 1 ? undefined : `scale(${effectiveScale})`,
+              transformOrigin: "top left",
+              willChange: effectiveScale !== 1 ? "transform" : undefined,
+            }}
+          >
+            {Array.from({ length: visiblePages }, (_, i) => (
+              <BufferedPdfPage
+                key={i + 1}
                 pageNumber={i + 1}
-                width={pageWidth || undefined}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-                loading={<PageSkeleton width={pageWidth} />}
-                error={<PageError width={pageWidth} />}
+                pageWidth={pageWidth}
+                pageRef={setPageRef(i + 1)}
               />
-            </div>
-          ))}
+            ))}
 
-          {/* Sentinel for progressive loading */}
-          {!renderAllPages && visiblePages < numPages && (
-            <div ref={sentinelRef} className="flex flex-col items-center gap-3">
-              <PageSkeleton width={pageWidth} />
-            </div>
-          )}
+            {/* Sentinel for progressive loading */}
+            {!renderAllPages && visiblePages < numPages && (
+              <div ref={sentinelRef} className="flex flex-col items-center gap-3">
+                <PageSkeleton width={pageWidth} />
+              </div>
+            )}
+          </div>
         </div>
       </Document>
     </div>

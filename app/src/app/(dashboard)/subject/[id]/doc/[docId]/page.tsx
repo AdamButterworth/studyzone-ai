@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
@@ -8,7 +8,6 @@ import {
   FileText,
   ListChecks,
   StickyNote,
-  Send,
   RotateCcw,
   ChevronLeft,
   ChevronRight,
@@ -18,7 +17,6 @@ import {
   Download,
   MoreHorizontal,
   Plus,
-  ChevronDown,
   GripVertical,
   ArrowRight,
   ZoomIn,
@@ -123,31 +121,6 @@ const TAB_OPTIONS: {
     icon: ListChecks,
     color: "bg-peach-light/60",
     iconColor: "text-peach/70",
-  },
-];
-
-/* ─── Mock tab data ─── */
-
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: "1",
-    role: "user",
-    text: "Can you explain the REINFORCE algorithm in simple terms?",
-  },
-  {
-    id: "2",
-    role: "ai",
-    text: "Think of REINFORCE like trial-and-error learning:\n\n1. Your agent tries a full episode using its current strategy\n2. After the episode, it looks at which actions led to good outcomes (high returns)\n3. It makes those good actions more likely in the future\n\nThe key formula is: increase the probability of action a in state s proportional to how good the total return was after taking that action.\n\nThe downside? Since it uses the full episode return, the learning signal is noisy \u2014 a single lucky reward at the end makes all actions in that episode look good. This is the \"high variance\" problem that baselines help solve.",
-  },
-  {
-    id: "3",
-    role: "user",
-    text: "Why does subtracting a baseline reduce variance but not bias?",
-  },
-  {
-    id: "4",
-    role: "ai",
-    text: 'Mathematically, the baseline b(s) doesn\'t depend on the action a, so:\n\nE[\u2207\u03B8 log \u03C0(a|s) \u00B7 b(s)] = 0\n\nThis means subtracting b(s) doesn\'t change the expected gradient (no bias), but it centers the returns around zero, which dramatically reduces their spread (lower variance).\n\nIntuition: without a baseline, an action that gets return +50 looks "good." But if the average return from that state is +100, it\'s actually below average! The baseline V(s) \u2248 100 corrects this, giving an advantage of -50, correctly telling the policy to avoid that action.',
   },
 ];
 
@@ -305,25 +278,63 @@ export default function DocumentPage() {
 
   /* ── Resizable panel ── */
   const [rightWidth, setRightWidth] = useState(480);
+  const [dragging, setDragging] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
+  const pendingRightWidthRef = useRef<number | null>(null);
+  const dragWidthRafRef = useRef<number | null>(null);
+  const pdfWidthRafRef = useRef<number | null>(null);
+  const pendingPdfBaseWidthRef = useRef<number | null>(null);
+
+  const flushRightPanelWidth = useCallback((nextWidth: number) => {
+    pendingRightWidthRef.current = nextWidth;
+    if (rightPanelRef.current) {
+      rightPanelRef.current.style.width = `${nextWidth}px`;
+    }
+  }, []);
 
   const startDrag = useCallback(() => {
     isDragging.current = true;
+    pendingRightWidthRef.current = rightWidth;
+    setDragging(true);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-  }, []);
+  }, [rightWidth]);
+
+  useLayoutEffect(() => {
+    if (!rightPanelRef.current) return;
+    rightPanelRef.current.style.width = isFullscreen ? "0px" : `${rightWidth}px`;
+  }, [isFullscreen, rightWidth]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const newW = rect.right - e.clientX;
-      setRightWidth(Math.max(340, Math.min(rect.width * 0.55, newW)));
+      const clampedWidth = Math.max(340, Math.min(rect.width * 0.55, newW));
+      pendingRightWidthRef.current = clampedWidth;
+      if (dragWidthRafRef.current !== null) return;
+      dragWidthRafRef.current = requestAnimationFrame(() => {
+        dragWidthRafRef.current = null;
+        const nextWidth = pendingRightWidthRef.current;
+        if (typeof nextWidth === "number") {
+          flushRightPanelWidth(nextWidth);
+        }
+      });
     };
     const onUp = () => {
       if (isDragging.current) {
         isDragging.current = false;
+        if (dragWidthRafRef.current !== null) {
+          cancelAnimationFrame(dragWidthRafRef.current);
+          dragWidthRafRef.current = null;
+        }
+        const finalWidth = pendingRightWidthRef.current ?? rightWidth;
+        flushRightPanelWidth(finalWidth);
+        setRightWidth(finalWidth);
+        setDragging(false);
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
       }
@@ -331,10 +342,13 @@ export default function DocumentPage() {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
     return () => {
+      if (dragWidthRafRef.current !== null) {
+        cancelAnimationFrame(dragWidthRafRef.current);
+      }
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
     };
-  }, []);
+  }, [flushRightPanelWidth, rightWidth]);
 
   /* ── Tabs ── */
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -374,8 +388,9 @@ export default function DocumentPage() {
   const isHome = !activeTab;
 
   /* ── Tab state ── */
-  const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
   const [lessonSteps, setLessonSteps] = useState(MOCK_LESSON);
   const [notes, setNotes] = useState("");
   const [homeQuery, setHomeQuery] = useState("");
@@ -386,7 +401,7 @@ export default function DocumentPage() {
   const [scrollToPage, setScrollToPage] = useState<number | undefined>();
   const [zoom, setZoom] = useState(1);
   const [pdfBaseWidth, setPdfBaseWidth] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [stablePdfRenderWidth, setStablePdfRenderWidth] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResultCount, setSearchResultCount] = useState<number | null>(null);
@@ -397,6 +412,7 @@ export default function DocumentPage() {
   const ZOOM_MIN = 0.5;
   const ZOOM_MAX = 2.5;
   const ZOOM_STEP = 0.15;
+  const MIN_PDF_RENDER_WIDTH = 960;
 
   const handleSearch = useCallback(() => {
     if (!searchQuery.trim() || !pdfScrollRef.current) {
@@ -475,57 +491,126 @@ export default function DocumentPage() {
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         // Use clientWidth to exclude scrollbar width, subtract padding (px-4 = 32px)
-        setPdfBaseWidth(entry.target.clientWidth - 32);
+        pendingPdfBaseWidthRef.current = entry.target.clientWidth - 32;
+        if (pdfWidthRafRef.current !== null) return;
+        pdfWidthRafRef.current = requestAnimationFrame(() => {
+          pdfWidthRafRef.current = null;
+          const nextWidth = pendingPdfBaseWidthRef.current;
+          if (typeof nextWidth === "number") {
+            setPdfBaseWidth((prev) =>
+              Math.abs(prev - nextWidth) < 0.5 ? prev : nextWidth
+            );
+          }
+        });
       }
     });
     observer.observe(pdfScrollRef.current);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (pdfWidthRafRef.current !== null) {
+        cancelAnimationFrame(pdfWidthRafRef.current);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    if (pdfBaseWidth > 0 && stablePdfRenderWidth === 0) {
+      setStablePdfRenderWidth(Math.max(pdfBaseWidth, MIN_PDF_RENDER_WIDTH));
+    }
+  }, [pdfBaseWidth, stablePdfRenderWidth]);
+
+  useEffect(() => {
+    setStablePdfRenderWidth(0);
+  }, [pdfUrl]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const sendChatMessage = async (text: string) => {
+    if (!text.trim() || chatLoading) return;
+
+    const userMsg: Message = { id: Date.now().toString(), role: "user", text: text.trim() };
+    setMessages((prev) => [...prev, userMsg]);
+    setChatLoading(true);
+
+    const aiMsgId = (Date.now() + 1).toString();
+    setMessages((prev) => [...prev, { id: aiMsgId, role: "ai", text: "" }]);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text.trim(),
+          document_id: docId,
+          history: messages.slice(-10),
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setMessages((prev) =>
+          prev.map((m) => (m.id === aiMsgId ? { ...m, text: `Error: ${err.error || "Something went wrong"}` } : m))
+        );
+        setChatLoading(false);
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") continue;
+
+          try {
+            const { text: chunk } = JSON.parse(data);
+            if (chunk) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === aiMsgId ? { ...m, text: m.text + chunk } : m))
+              );
+            }
+          } catch {
+            // skip
+          }
+        }
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === aiMsgId ? { ...m, text: "Failed to get a response. Please try again." } : m))
+      );
+    }
+
+    setChatLoading(false);
+  };
+
   const handleSendMessage = () => {
     if (!chatInput.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now().toString(), role: "user", text: chatInput.trim() },
-    ]);
+    const text = chatInput;
     setChatInput("");
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          text: "I\u2019m analyzing the relevant sections of the document. In a full implementation, I\u2019d give you a detailed answer grounded in the material.",
-        },
-      ]);
-    }, 1200);
+    sendChatMessage(text);
   };
 
   const handleHomeAsk = () => {
     if (!homeQuery.trim()) return;
+    const text = homeQuery;
+    setHomeQuery("");
     // Open a new chat tab with the question
     const newTab: Tab = { id: Date.now().toString(), type: "chat", label: "Chat" };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now().toString(), role: "user", text: homeQuery.trim() },
-    ]);
-    setHomeQuery("");
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "ai",
-          text: "Great question! Let me look through the document to help you with that.",
-        },
-      ]);
-    }, 1200);
+    sendChatMessage(text);
   };
 
   const handlePageChange = useCallback((page: number, total: number) => {
@@ -539,6 +624,18 @@ export default function DocumentPage() {
   };
 
   const doneCount = lessonSteps.filter((s) => s.done).length;
+  const renderBaseWidth =
+    stablePdfRenderWidth > 0
+      ? stablePdfRenderWidth
+      : pdfBaseWidth > 0
+        ? Math.max(pdfBaseWidth, MIN_PDF_RENDER_WIDTH)
+        : 0;
+  const renderPdfWidth =
+    renderBaseWidth > 0 ? renderBaseWidth * zoom : undefined;
+  const livePdfScale =
+    renderBaseWidth > 0 && pdfBaseWidth > 0
+      ? pdfBaseWidth / renderBaseWidth
+      : 1;
 
   return (
     <div
@@ -695,7 +792,8 @@ export default function DocumentPage() {
               url={pdfUrl}
               onPageChange={handlePageChange}
               currentPage={scrollToPage}
-              pageWidth={pdfBaseWidth > 0 ? pdfBaseWidth * zoom : undefined}
+              pageWidth={renderPdfWidth}
+              displayScale={livePdfScale}
               renderAllPages={searchOpen || searchQuery.trim().length > 0}
               initialRenderCount={3}
               renderBatchSize={4}
@@ -724,8 +822,8 @@ export default function DocumentPage() {
 
       {/* ════════ RIGHT: AI Tools Panel ════════ */}
       <div
-        style={{ width: isFullscreen ? 0 : rightWidth }}
-        className={`flex shrink-0 flex-col overflow-hidden bg-white transition-[width] duration-300 ${isFullscreen ? "w-0" : ""}`}
+        ref={rightPanelRef}
+        className={`flex shrink-0 flex-col overflow-hidden bg-white ${dragging ? "" : "transition-[width] duration-300"} ${isFullscreen ? "w-0" : ""}`}
       >
         {/* Tab bar — only show when tabs exist */}
         {tabs.length > 0 && (
@@ -928,7 +1026,15 @@ export default function DocumentPage() {
                             : "rounded-[20px] rounded-bl-lg bg-cream-dark/40 text-ink"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap">{msg.text}</p>
+                        {msg.role === "ai" && msg.text === "" ? (
+                          <div className="flex items-center gap-1 py-1">
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "0ms" }} />
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "150ms" }} />
+                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "300ms" }} />
+                          </div>
+                        ) : (
+                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -943,15 +1049,17 @@ export default function DocumentPage() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) =>
-                      e.key === "Enter" && handleSendMessage()
+                      e.key === "Enter" && !chatLoading && handleSendMessage()
                     }
                     placeholder="Ask about this document..."
-                    className="w-full bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/50"
+                    disabled={chatLoading}
+                    className="w-full bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/50 disabled:opacity-60"
                   />
                   <button
                     onClick={handleSendMessage}
+                    disabled={chatLoading}
                     className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-                      chatInput.trim()
+                      chatInput.trim() && !chatLoading
                         ? "bg-ink text-white hover:bg-ink/80"
                         : "text-ink-muted/40"
                     }`}
