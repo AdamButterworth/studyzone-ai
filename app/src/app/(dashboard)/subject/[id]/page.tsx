@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Plus,
@@ -26,6 +26,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { uploadDocument, deleteDocumentFile } from "@/lib/uploadDocument";
+import { useProcessing } from "@/lib/ProcessingContext";
 
 /* ─── Types ─── */
 
@@ -59,6 +60,8 @@ export default function SubjectPage() {
   const id = params.id as string;
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
+  const router = useRouter();
+  const { addJob } = useProcessing();
 
   const [subjectName, setSubjectName] = useState("");
   const [subjectDesc, setSubjectDesc] = useState("");
@@ -207,7 +210,19 @@ export default function SubjectPage() {
       }
 
       console.log("Upload success:", result.documentId, result.title);
-      // Add to content list immediately
+
+      // Track processing in toast
+      addJob(result.documentId, result.title);
+
+      // Navigate to the document page immediately (single file)
+      if (files.length === 1) {
+        setUploading(false);
+        setUploadModalOpen(false);
+        router.push(`/subject/${id}/doc/${result.documentId}`);
+        return;
+      }
+
+      // Multiple files: add to content list
       setContent((prev) => [
         {
           id: result.documentId,

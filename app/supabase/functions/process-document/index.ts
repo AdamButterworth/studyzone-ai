@@ -80,14 +80,15 @@ async function embedTexts(texts: string[]): Promise<number[][]> {
     const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE);
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:batchEmbedContents?key=${GOOGLE_AI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key=${GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requests: batch.map((text) => ({
-            model: "models/text-embedding-004",
+            model: "models/gemini-embedding-001",
             content: { parts: [{ text }] },
+            outputDimensionality: 768,
           })),
         }),
       }
@@ -123,8 +124,10 @@ Deno.serve(async (req) => {
   let documentId: string | null = null;
 
   try {
+    console.log("Edge function invoked");
     const body = await req.json();
     documentId = body.document_id;
+    console.log("Document ID:", documentId);
 
     if (!documentId) {
       return new Response(JSON.stringify({ error: "document_id required" }), {
@@ -156,6 +159,8 @@ Deno.serve(async (req) => {
       });
     }
 
+    console.log("Document found:", doc.id, "file_path:", doc.file_path);
+
     // 2. Mark as processing
     await supabase
       .from("documents")
@@ -177,13 +182,15 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to download PDF: ${downloadError?.message}`);
     }
 
-    // 5. Extract text using pdf-parse
-    const pdfParse = (await import("https://esm.sh/pdf-parse@1.1.1")).default;
-    const buffer = await fileData.arrayBuffer();
-    const pdf = await pdfParse(new Uint8Array(buffer));
+    console.log("PDF downloaded, extracting text...");
 
-    const rawText = pdf.text;
-    const pageCount = pdf.numpages;
+    // 5. Extract text using unpdf (works in Deno/edge)
+    const { extractText, getDocumentProxy } = await import("https://esm.sh/unpdf@0.12.1");
+
+    const buffer = await fileData.arrayBuffer();
+    const pdf = await getDocumentProxy(new Uint8Array(buffer));
+    const { text: rawText, totalPages: pageCount } = await extractText(pdf, { mergePages: true });
+
     const wordCount = rawText.split(/\s+/).filter(Boolean).length;
 
     // Save raw text + metadata
@@ -192,6 +199,8 @@ Deno.serve(async (req) => {
       .update({ raw_text: rawText, page_count: pageCount, word_count: wordCount })
       .eq("id", documentId);
 
+    console.log("Text extracted:", wordCount, "words,", pageCount, "pages");
+
     // 6. Chunk
     const chunks = chunkText(rawText);
 
@@ -199,8 +208,12 @@ Deno.serve(async (req) => {
       throw new Error("No text could be extracted from this PDF");
     }
 
+    console.log("Chunked into", chunks.length, "chunks");
+
     // 7. Embed
     const embeddings = await embedTexts(chunks.map((c) => c.text));
+
+    console.log("Embeddings generated:", embeddings.length);
 
     // 8. Insert chunks with embeddings
     const rows = chunks.map((chunk, i) => ({

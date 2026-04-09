@@ -23,8 +23,24 @@ export async function uploadDocument(
     return { documentId: "", title: "", error: "File must be under 50MB." };
   }
 
-  const title = file.name.replace(/\.pdf$/i, "");
-  const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  let title = file.name.replace(/\.pdf$/i, "");
+
+  // Check for duplicate titles in this subject and append number if needed
+  const { data: existing } = await supabase
+    .from("documents")
+    .select("title")
+    .eq("subject_id", subjectId)
+    .eq("user_id", userId)
+    .ilike("title", `${title}%`);
+
+  if (existing && existing.length > 0) {
+    const titles = new Set(existing.map((d: { title: string }) => d.title));
+    if (titles.has(title)) {
+      let n = 2;
+      while (titles.has(`${title} (${n})`)) n++;
+      title = `${title} (${n})`;
+    }
+  }
 
   // Phase 1: Create DB row with status='uploading'
   const { data: doc, error: insertError } = await supabase

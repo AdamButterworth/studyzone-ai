@@ -253,7 +253,7 @@ export default function DocumentPage() {
       if (subjectResult.data?.name) setSubjectName(subjectResult.data.name);
       if (docResult.data?.title) setDocTitle(docResult.data.title);
 
-      if (docResult.data?.file_path && docResult.data.status === "ready") {
+      if (docResult.data?.file_path && docResult.data.status !== "uploading") {
         const { data: urlData } = await supabase.storage
           .from("documents")
           .createSignedUrl(docResult.data.file_path, 3600);

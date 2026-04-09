@@ -5,6 +5,8 @@ import AppSidebar from "@/components/app/AppSidebar";
 import AppTopBar from "@/components/app/AppTopBar";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { TopBarProvider } from "@/lib/TopBarContext";
+import { ProcessingProvider } from "@/lib/ProcessingContext";
+import ProcessingToast from "@/components/app/ProcessingToast";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -12,7 +14,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
     <TopBarProvider>
+    <ProcessingProvider>
     <div className="flex h-screen overflow-hidden bg-[#FAF7F4]">
+      <ProcessingToast />
       {/* Mobile drawer overlay */}
       {sidebarOpen && (
         <div
@@ -51,6 +55,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+    </ProcessingProvider>
     </TopBarProvider>
     </AuthProvider>
   );
