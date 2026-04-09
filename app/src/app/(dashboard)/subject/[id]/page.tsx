@@ -734,10 +734,10 @@ export default function SubjectPage() {
         ) : null}
       </div>
 
-      {/* ─── Learning Bar (sticky bottom) ─── */}
-      <div className="sticky bottom-0 z-10">
-        <div className="pointer-events-none h-16 bg-gradient-to-t from-[#FAF7F4] to-transparent" />
-        <div className="bg-[#FAF7F4] px-1 pb-3">
+      {/* ─── Learning Bar (fixed bottom) ─── */}
+      <div className="fixed bottom-0 left-0 right-0 z-10 md:left-[280px]">
+        <div className="pointer-events-none h-12 bg-gradient-to-t from-[#FAF7F4] to-transparent" />
+        <div className="bg-[#FAF7F4] px-5 pb-5 md:px-8">
           <div className="mx-auto max-w-2xl">
             <label className="flex cursor-text items-center gap-3 rounded-2xl border border-black/10 bg-white px-4 py-3 shadow-sm transition-all focus-within:border-black/18 focus-within:shadow-md">
               <Sparkles size={16} className="shrink-0 text-ink-muted/60" />
