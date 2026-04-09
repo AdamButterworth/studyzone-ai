@@ -9,6 +9,7 @@ Status of each feature on the document page right panel.
 | [Lesson Plan](lesson-plan.md) | 📋 Planned | AI-generated guided lesson steps |
 | [Notes](notes.md) | 📋 Planned | Simple note persistence per document |
 | [Markdown Rendering](markdown-rendering.md) | 📋 TODO | Markdown in chat, LaTeX, code highlighting |
+| [Highlight Actions](highlight-actions.md) | 📋 TODO | Select PDF text → ask, save to notes, highlight |
 
 ## Build order
 1. ~~Chat~~ ✅
