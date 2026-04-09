@@ -73,3 +73,76 @@ html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizelegibility;
 }
+
+/* Summary markdown styles */
+.prose-summary h2 {
+  font-weight: 600;
+  font-size: 15px;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: var(--color-ink);
+}
+
+.prose-summary h2:first-child {
+  margin-top: 0;
+}
+
+.prose-summary h3 {
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: 1.2em;
+  margin-bottom: 0.4em;
+  color: var(--color-ink);
+}
+
+.prose-summary p {
+  margin-bottom: 0.6em;
+}
+
+.prose-summary ul,
+.prose-summary ol {
+  padding-left: 1.2em;
+  margin-bottom: 0.6em;
+}
+
+.prose-summary li {
+  margin-bottom: 0.25em;
+}
+
+.prose-summary strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.prose-summary table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 12px;
+}
+
+.prose-summary th,
+.prose-summary td {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+
+.prose-summary th {
+  background: rgba(0, 0, 0, 0.02);
+  font-weight: 600;
+}
+
+.prose-summary code {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.prose-summary blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.1);
+  padding-left: 1em;
+  margin: 0.8em 0;
+  color: var(--color-ink-light);
+}

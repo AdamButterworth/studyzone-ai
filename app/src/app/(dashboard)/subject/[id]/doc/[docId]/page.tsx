@@ -24,7 +24,10 @@ import {
   Search,
   Maximize2,
   Minimize2,
+  Trash2,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTopBar } from "@/lib/TopBarContext";
@@ -164,27 +167,6 @@ const MOCK_LESSON: LessonStep[] = [
     description:
       "Clipped objectives, implementation details, and real-world usage.",
     done: false,
-  },
-];
-
-const MOCK_SETS: SavedSet[] = [
-  {
-    id: "s1",
-    type: "summary",
-    title: "Policy Gradient Methods: Key Concepts",
-    detail: "Detailed Summary \u00B7 All topics",
-  },
-  {
-    id: "s2",
-    type: "notes",
-    title: "Untitled note",
-    detail: "4/7/2026",
-  },
-  {
-    id: "s3",
-    type: "chat",
-    title: "REINFORCE explained simply",
-    detail: "4/7/2026",
   },
 ];
 
@@ -366,6 +348,15 @@ export default function DocumentPage() {
   }, []);
 
   const addTab = (type: TabType) => {
+    // Reuse existing tab for summary/notes/lesson (not chat — multiple allowed)
+    if (type !== "chat") {
+      const existing = tabs.find((t) => t.type === type);
+      if (existing) {
+        setActiveTabId(existing.id);
+        setShowAddMenu(false);
+        return;
+      }
+    }
     const opt = TAB_OPTIONS.find((o) => o.type === type)!;
     const newTab: Tab = { id: Date.now().toString(), type, label: opt.label };
     setTabs((prev) => [...prev, newTab]);
@@ -391,6 +382,64 @@ export default function DocumentPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+
+  /* ── Summary state ── */
+  const [summaryContent, setSummaryContent] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryGenerating, setSummaryGenerating] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryChecked, setSummaryChecked] = useState(false);
+
+  /* ── Resources (real data for Learn tab) ── */
+  const [savedResources, setSavedResources] = useState<SavedSet[]>([]);
+  const [resourceMenuId, setResourceMenuId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!resourceMenuId) return;
+    const close = () => setResourceMenuId(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [resourceMenuId]);
+
+  const handleDeleteResource = async (resourceId: string) => {
+    setResourceMenuId(null);
+    const confirmed = window.confirm("Are you sure you want to delete this resource?");
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("document_summaries")
+      .delete()
+      .eq("id", resourceId);
+
+    if (!error) {
+      setSavedResources((prev) => prev.filter((r) => r.id !== resourceId));
+      // Reset summary state so it regenerates on next open
+      setSummaryContent(null);
+      setSummaryChecked(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchResources = async () => {
+      const { data } = await supabase
+        .from("document_summaries")
+        .select("id, created_at")
+        .eq("document_id", docId)
+        .order("created_at", { ascending: false });
+
+      if (data) {
+        const resources: SavedSet[] = data.map((s: { id: string; created_at: string }) => ({
+          id: s.id,
+          type: "summary" as TabType,
+          title: `Summary`,
+          detail: new Date(s.created_at).toLocaleDateString(),
+        }));
+        setSavedResources(resources);
+      }
+    };
+    fetchResources();
+  }, [user, docId, summaryGenerating]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lessonSteps, setLessonSteps] = useState(MOCK_LESSON);
   const [notes, setNotes] = useState("");
   const [homeQuery, setHomeQuery] = useState("");
@@ -611,6 +660,92 @@ export default function DocumentPage() {
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
     sendChatMessage(text);
+  };
+
+  /* ── Summary: fetch existing or auto-generate ── */
+  useEffect(() => {
+    if (activeTab?.type !== "summary" || summaryChecked || !user) return;
+
+    const checkExisting = async () => {
+      setSummaryLoading(true);
+      const { data } = await supabase
+        .from("document_summaries")
+        .select("content")
+        .eq("document_id", docId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.content) {
+        setSummaryContent(data.content);
+        setSummaryLoading(false);
+        setSummaryChecked(true);
+      } else {
+        setSummaryLoading(false);
+        setSummaryChecked(true);
+        generateSummary();
+      }
+    };
+
+    checkExisting();
+  }, [activeTab?.type, summaryChecked, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const generateSummary = async () => {
+    if (!user) return;
+    setSummaryGenerating(true);
+    setSummaryError(null);
+    setSummaryContent("");
+
+    try {
+      const res = await fetch("/api/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_id: docId, user_id: user.id }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setSummaryError(err.error || "Failed to generate summary");
+        setSummaryContent(null);
+        setSummaryGenerating(false);
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const data = line.slice(6).trim();
+          if (data === "[DONE]") continue;
+
+          try {
+            const { text: chunk } = JSON.parse(data);
+            if (chunk) {
+              fullText += chunk;
+              setSummaryContent(fullText);
+            }
+          } catch {
+            // skip
+          }
+        }
+      }
+    } catch {
+      setSummaryError("Failed to generate summary. Please try again.");
+      setSummaryContent(null);
+    }
+
+    setSummaryGenerating(false);
   };
 
   const handlePageChange = useCallback((page: number, total: number) => {
@@ -944,39 +1079,64 @@ export default function DocumentPage() {
                   <p className="mb-3 font-app text-[11px] font-medium uppercase tracking-wider text-ink-muted">
                     My Resources
                   </p>
+                  {savedResources.length === 0 && (
+                    <p className="px-3 py-2 font-app text-[12px] text-ink-muted/50">
+                      No resources yet — try generating a summary
+                    </p>
+                  )}
                   <div className="space-y-0.5">
-                    {MOCK_SETS.map((set) => {
+                    {savedResources.map((set) => {
                       const opt = TAB_OPTIONS.find(
                         (o) => o.type === set.type
                       );
                       const Icon = opt?.icon || FileText;
                       return (
-                        <button
-                          key={set.id}
-                          onClick={() => addTab(set.type)}
-                          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cream-dark/30"
-                        >
-                          <div
-                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${opt?.color || "bg-cream-dark/50"}`}
+                        <div key={set.id} className="relative">
+                          <button
+                            onClick={() => addTab(set.type)}
+                            className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cream-dark/30"
                           >
-                            <Icon
-                              size={14}
-                              className={opt?.iconColor || "text-ink-muted"}
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-app text-[13px] font-medium">
-                              {set.title}
-                            </p>
-                            <p className="font-app text-[11px] text-ink-muted">
-                              {set.detail}
-                            </p>
-                          </div>
-                          <MoreHorizontal
-                            size={14}
-                            className="shrink-0 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100"
-                          />
-                        </button>
+                            <div
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${opt?.color || "bg-cream-dark/50"}`}
+                            >
+                              <Icon
+                                size={14}
+                                className={opt?.iconColor || "text-ink-muted"}
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-app text-[13px] font-medium">
+                                {set.title}
+                              </p>
+                              <p className="font-app text-[11px] text-ink-muted">
+                                {set.detail}
+                              </p>
+                            </div>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setResourceMenuId(resourceMenuId === set.id ? null : set.id);
+                              }}
+                              className="shrink-0 rounded-md p-1 text-ink-muted opacity-0 transition-all hover:bg-cream-dark/60 group-hover:opacity-100"
+                            >
+                              <MoreHorizontal size={14} />
+                            </span>
+                          </button>
+                          {resourceMenuId === set.id && (
+                            <div
+                              onClick={(e) => e.stopPropagation()}
+                              className="absolute right-2 top-10 z-20 min-w-[120px] rounded-xl border border-black/8 bg-white py-1 shadow-lg"
+                            >
+                              <button
+                                onClick={() => handleDeleteResource(set.id)}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-50"
+                              >
+                                <Trash2 size={13} />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -1073,67 +1233,64 @@ export default function DocumentPage() {
 
           {/* ═══ SUMMARY TAB ═══ */}
           {activeTab?.type === "summary" && (
-            <div className="flex-1 overflow-y-auto px-5 py-5">
-              <div className="mb-4 flex items-center gap-2">
+            <div className="flex flex-1 flex-col overflow-hidden">
+              <div className="flex items-center gap-2 px-5 pt-5 pb-3">
                 <Sparkles size={14} className="text-ink-muted" />
                 <span className="font-app text-[11px] font-medium uppercase tracking-wider text-ink-muted">
                   AI-Generated Summary
                 </span>
               </div>
-              <div className="font-app text-[13px] leading-[1.8] text-ink/85">
-                <h3 className="mb-2 font-app-heading text-[14px]">
-                  Key Concepts
-                </h3>
-                <p className="mb-2 pl-3">
-                  <span className="font-semibold">
-                    Policy gradient methods
-                  </span>{" "}
-                  optimize the policy directly via gradient ascent on expected
-                  return, unlike value-based methods.
-                </p>
-                <p className="mb-2 pl-3">
-                  <span className="font-semibold">
-                    The Policy Gradient Theorem
-                  </span>{" "}
-                  provides a tractable gradient using the score function,
-                  avoiding differentiation through dynamics.
-                </p>
-                <p className="mb-2 pl-3">
-                  <span className="font-semibold">REINFORCE</span> is the
-                  simplest algorithm: sample episodes, weight actions by
-                  returns. Simple but high variance.
-                </p>
-                <p className="mb-2 pl-3">
-                  <span className="font-semibold">Baselines</span> (typically
-                  V(s)) reduce variance without bias. This leads to the
-                  advantage function.
-                </p>
-                <p className="mb-2 pl-3">
-                  <span className="font-semibold">Actor-Critic</span> methods
-                  learn both policy and value function simultaneously, giving
-                  lower-variance gradient estimates.
-                </p>
 
-                <h3 className="mb-2 mt-5 font-app-heading text-[14px]">
-                  Main Takeaways
-                </h3>
-                <p className="mb-1.5 pl-3">
-                  1. Policy gradients excel in continuous action spaces
-                </p>
-                <p className="mb-1.5 pl-3">
-                  2. Variance reduction is the central challenge
-                </p>
-                <p className="mb-1.5 pl-3">
-                  3. PPO is the most widely used variant
-                </p>
-                <p className="mb-1.5 pl-3">
-                  4. These methods underpin RLHF for modern AI alignment
-                </p>
+              <div className="flex-1 overflow-y-auto px-5 pb-5">
+                {/* Loading: checking DB */}
+                {summaryLoading && !summaryGenerating && (
+                  <div className="flex items-center gap-2 py-8">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-ink-muted/30 border-t-ink-muted" />
+                    <span className="font-app text-[13px] text-ink-muted">Loading summary...</span>
+                  </div>
+                )}
+
+                {/* Error */}
+                {summaryError && (
+                  <div className="rounded-xl bg-red-50 px-4 py-3 mb-4">
+                    <p className="font-app text-[13px] text-red-600">{summaryError}</p>
+                    <button
+                      onClick={generateSummary}
+                      className="mt-2 font-app text-[12px] font-medium text-red-700 underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+
+                {/* Streaming / rendered markdown */}
+                {summaryContent !== null && summaryContent !== "" && (
+                  <div className="prose-summary font-app text-[13px] leading-[1.8] text-ink/85">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {summaryContent}
+                    </ReactMarkdown>
+                  </div>
+                )}
+
+                {/* Generating indicator */}
+                {summaryGenerating && (
+                  <div className="flex items-center gap-2 py-3">
+                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-ink-muted/30 border-t-ink-muted" />
+                    <span className="font-app text-[11px] text-ink-muted">Generating...</span>
+                  </div>
+                )}
+
+                {/* Regenerate button */}
+                {summaryContent && !summaryGenerating && (
+                  <button
+                    onClick={generateSummary}
+                    className="mt-6 flex items-center gap-2 rounded-full border border-black/8 px-4 py-2.5 font-app text-[12px] font-medium text-ink-light transition-colors hover:bg-cream-dark/50 hover:text-ink"
+                  >
+                    <RotateCcw size={13} />
+                    Regenerate
+                  </button>
+                )}
               </div>
-              <button className="mt-6 flex items-center gap-2 rounded-full border border-black/8 px-4 py-2.5 font-app text-[12px] font-medium text-ink-light transition-colors hover:bg-cream-dark/50 hover:text-ink">
-                <RotateCcw size={13} />
-                Regenerate
-              </button>
             </div>
           )}
 
