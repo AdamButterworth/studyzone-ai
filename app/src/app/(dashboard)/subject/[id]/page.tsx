@@ -33,6 +33,7 @@ interface ContentItem {
   id: string;
   name: string;
   type: string;
+  status: string;
   preview: string;
   added: string;
   lastViewed: string;
@@ -91,6 +92,7 @@ export default function SubjectPage() {
       id: d.id,
       name: d.title,
       type: d.type.toUpperCase(),
+      status: d.status || "ready",
       preview: d.raw_text?.slice(0, 120) || "",
       added: timeAgo(d.created_at),
       lastViewed: d.last_viewed_at ? timeAgo(d.last_viewed_at) : "—",
@@ -118,7 +120,7 @@ export default function SubjectPage() {
           .single(),
         supabase
           .from("documents")
-          .select("id, title, type, raw_text, created_at, last_viewed_at")
+          .select("id, title, type, status, raw_text, created_at, last_viewed_at")
           .eq("subject_id", id)
           .order("created_at", { ascending: false })
           .range(0, PAGE_SIZE - 1),
@@ -150,7 +152,7 @@ export default function SubjectPage() {
     setLoadingMore(true);
     const { data } = await supabase
       .from("documents")
-      .select("id, title, type, raw_text, created_at, last_viewed_at")
+      .select("id, title, type, status, raw_text, created_at, last_viewed_at")
       .eq("subject_id", id)
       .order("created_at", { ascending: false })
       .range(content.length, content.length + PAGE_SIZE - 1);
@@ -211,6 +213,7 @@ export default function SubjectPage() {
           id: result.documentId,
           name: result.title,
           type: "PDF",
+          status: "processing",
           preview: "",
           added: "Just now",
           lastViewed: "—",
@@ -334,6 +337,7 @@ export default function SubjectPage() {
         : pasteToast.text.slice(0, 60) +
           (pasteToast.text.length > 60 ? "..." : ""),
       type: pasteToast.isUrl ? "LINK" : "NOTE",
+      status: "ready",
       preview: pasteToast.text.slice(0, 120),
       added: "Just now",
       lastViewed: "Just now",
@@ -596,9 +600,18 @@ export default function SubjectPage() {
                       </p>
                     </div>
 
-                    {/* Type */}
+                    {/* Type + status */}
                     <span className="w-14 text-center font-app text-[13px] font-medium text-ink-muted">
-                      {item.type}
+                      {item.status === "processing" ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-600">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                          Indexing
+                        </span>
+                      ) : item.status === "error" ? (
+                        <span className="text-[11px] text-red-500">Error</span>
+                      ) : (
+                        item.type
+                      )}
                     </span>
 
                     {/* Dates */}

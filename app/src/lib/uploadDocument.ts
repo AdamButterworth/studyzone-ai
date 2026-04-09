@@ -90,6 +90,14 @@ export async function uploadDocument(
     return { documentId, title, error: "Failed to finalize upload." };
   }
 
+  // Phase 4: Trigger processing (non-blocking)
+  supabase.functions.invoke("process-document", {
+    body: { document_id: documentId },
+  }).then((res) => {
+    if (res.error) console.error("Processing trigger failed:", res.error);
+    else console.log("Processing started for:", documentId);
+  });
+
   return { documentId, title };
 }
 
