@@ -494,7 +494,7 @@ export default function SubjectPage() {
       </div>
 
       {/* ─── Content Area ─── */}
-      <div className="mt-6 flex-1 pb-20">
+      <div className="mt-6 flex-1 pb-40">
         {/* Loading skeleton */}
         {loading && (
           <div className="space-y-2">
