@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
+import PdfLoadingShell from "@/components/app/PdfLoadingShell";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
@@ -47,12 +48,14 @@ interface BufferedPdfPageProps {
   pageNumber: number;
   pageWidth?: number;
   pageRef?: (el: HTMLDivElement | null) => void;
+  onRendered?: () => void;
 }
 
 function BufferedPdfPage({
   pageNumber,
   pageWidth,
   pageRef,
+  onRendered,
 }: BufferedPdfPageProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const previousWidthRef = useRef<number | undefined>(pageWidth);
@@ -82,8 +85,13 @@ function BufferedPdfPage({
     previousWidthRef.current = pageWidth;
   }, [pageWidth]);
 
-  const clearSnapshot = useCallback(() => {
+  const handleRenderSuccess = useCallback(() => {
     setHasRenderedOnce(true);
+    setSnapshotSrc(null);
+    onRendered?.();
+  }, [onRendered]);
+
+  const clearSnapshot = useCallback(() => {
     setSnapshotSrc(null);
   }, []);
 
@@ -113,7 +121,7 @@ function BufferedPdfPage({
         width={pageWidth || undefined}
         renderTextLayer={true}
         renderAnnotationLayer={true}
-        onRenderSuccess={clearSnapshot}
+        onRenderSuccess={handleRenderSuccess}
         onRenderError={clearSnapshot}
         loading={showLoadingSkeleton ? <PageSkeleton width={pageWidth} /> : null}
         error={<PageError width={pageWidth} />}
@@ -133,6 +141,8 @@ interface PdfViewerProps {
   initialRenderCount?: number;
   renderBatchSize?: number;
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+  loadingVisibleWidth?: number;
+  onFirstPageRender?: () => void;
 }
 
 export default function PdfViewer({
@@ -145,6 +155,8 @@ export default function PdfViewer({
   initialRenderCount = 3,
   renderBatchSize = 4,
   scrollContainerRef,
+  loadingVisibleWidth,
+  onFirstPageRender,
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0);
   const [visiblePages, setVisiblePages] = useState(0);
@@ -153,6 +165,11 @@ export default function PdfViewer({
   const scrollingToPage = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const didReportFirstPageRenderRef = useRef(false);
+
+  useEffect(() => {
+    didReportFirstPageRenderRef.current = false;
+  }, [url]);
 
   /* ── Document loaded ── */
   const onDocumentLoadSuccess = useCallback(
@@ -271,6 +288,12 @@ export default function PdfViewer({
 
   const liveScale =
     Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1;
+  const effectiveLoadingWidth =
+    typeof loadingVisibleWidth === "number" && loadingVisibleWidth > 0
+      ? loadingVisibleWidth
+      : typeof pageWidth === "number" && pageWidth > 0
+        ? pageWidth * liveScale
+        : undefined;
   const renderCatchupScale =
     typeof pageWidth === "number" &&
     pageWidth > 0 &&
@@ -286,6 +309,11 @@ export default function PdfViewer({
         : undefined;
   const scaledHeight =
     contentSize.height > 0 ? contentSize.height * effectiveScale : undefined;
+  const handleFirstPageRender = useCallback(() => {
+    if (didReportFirstPageRenderRef.current) return;
+    didReportFirstPageRenderRef.current = true;
+    onFirstPageRender?.();
+  }, [onFirstPageRender]);
 
   return (
     <div
@@ -295,13 +323,7 @@ export default function PdfViewer({
       <Document
         file={url}
         onLoadSuccess={onDocumentLoadSuccess}
-        loading={
-          <div className="flex flex-col items-center gap-3">
-            {[1, 2].map((i) => (
-              <PageSkeleton key={i} width={pageWidth} />
-            ))}
-          </div>
-        }
+        loading={<PdfLoadingShell visibleWidth={effectiveLoadingWidth} />}
         error={
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="font-app text-[14px] font-medium text-ink">
@@ -333,6 +355,7 @@ export default function PdfViewer({
                 pageNumber={i + 1}
                 pageWidth={pageWidth}
                 pageRef={setPageRef(i + 1)}
+                onRendered={i === 0 ? handleFirstPageRender : undefined}
               />
             ))}
 

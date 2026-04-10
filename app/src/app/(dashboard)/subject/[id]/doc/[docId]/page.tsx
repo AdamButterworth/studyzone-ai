@@ -29,29 +29,17 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import PdfLoadingShell from "@/components/app/PdfLoadingShell";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useTopBar } from "@/lib/TopBarContext";
 
+const DEFAULT_PDF_VISIBLE_WIDTH = 760;
+let lastKnownPdfVisibleWidth = DEFAULT_PDF_VISIBLE_WIDTH;
+
 const PdfViewer = dynamic(() => import("@/components/app/PdfViewer"), {
   ssr: false,
-  loading: () => (
-    <div className="flex flex-col items-center gap-4">
-      {[1, 2].map((i) => (
-        <div
-          key={i}
-          className="animate-pulse rounded-xl bg-white"
-          style={{
-            width: "100%",
-            maxWidth: 720,
-            aspectRatio: "1 / 1.414",
-            boxShadow:
-              "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03)",
-          }}
-        />
-      ))}
-    </div>
-  ),
+  loading: () => null,
 });
 
 /* ─── Types ─── */
@@ -550,7 +538,9 @@ export default function DocumentPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [scrollToPage, setScrollToPage] = useState<number | undefined>();
   const [zoom, setZoom] = useState(1);
-  const [pdfBaseWidth, setPdfBaseWidth] = useState(0);
+  const [pdfBaseWidth, setPdfBaseWidth] = useState(() => lastKnownPdfVisibleWidth);
+  const [pdfFirstPageReady, setPdfFirstPageReady] = useState(false);
+  const [pdfLoadingShellVisible, setPdfLoadingShellVisible] = useState(true);
   const [stablePdfRenderWidth, setStablePdfRenderWidth] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -636,8 +626,17 @@ export default function DocumentPage() {
   }, [searchOpen]);
 
   // Measure the scroll container width — stable regardless of content size
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!pdfScrollRef.current) return;
+    const updatePdfBaseWidth = (nextWidth: number) => {
+      pendingPdfBaseWidthRef.current = nextWidth;
+      setPdfBaseWidth((prev) =>
+        Math.abs(prev - nextWidth) < 0.5 ? prev : nextWidth
+      );
+    };
+
+    updatePdfBaseWidth(pdfScrollRef.current.clientWidth - 32);
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         // Use clientWidth to exclude scrollbar width, subtract padding (px-4 = 32px)
@@ -647,9 +646,7 @@ export default function DocumentPage() {
           pdfWidthRafRef.current = null;
           const nextWidth = pendingPdfBaseWidthRef.current;
           if (typeof nextWidth === "number") {
-            setPdfBaseWidth((prev) =>
-              Math.abs(prev - nextWidth) < 0.5 ? prev : nextWidth
-            );
+            updatePdfBaseWidth(nextWidth);
           }
         });
       }
@@ -670,8 +667,29 @@ export default function DocumentPage() {
   }, [pdfBaseWidth, stablePdfRenderWidth]);
 
   useEffect(() => {
+    if (pdfBaseWidth > 0) {
+      lastKnownPdfVisibleWidth = pdfBaseWidth;
+    }
+  }, [pdfBaseWidth]);
+
+  useEffect(() => {
     setStablePdfRenderWidth(0);
+    setPdfFirstPageReady(false);
+    setPdfLoadingShellVisible(true);
   }, [pdfUrl]);
+
+  useEffect(() => {
+    if (!pdfFirstPageReady) {
+      setPdfLoadingShellVisible(true);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setPdfLoadingShellVisible(false);
+    }, 220);
+
+    return () => window.clearTimeout(timer);
+  }, [pdfFirstPageReady]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -950,19 +968,24 @@ export default function DocumentPage() {
     setCurrentPage(page);
   };
 
+  const handlePdfFirstPageRender = useCallback(() => {
+    setPdfFirstPageReady(true);
+  }, []);
+
   const doneCount = lessonSteps.filter((s) => s.done).length;
+  const visiblePdfBaseWidth =
+    pdfBaseWidth > 0 ? pdfBaseWidth : DEFAULT_PDF_VISIBLE_WIDTH;
   const renderBaseWidth =
     stablePdfRenderWidth > 0
       ? stablePdfRenderWidth
-      : pdfBaseWidth > 0
-        ? Math.max(pdfBaseWidth, MIN_PDF_RENDER_WIDTH)
-        : 0;
+      : Math.max(visiblePdfBaseWidth, MIN_PDF_RENDER_WIDTH);
   const renderPdfWidth =
     renderBaseWidth > 0 ? renderBaseWidth * zoom : undefined;
   const livePdfScale =
-    renderBaseWidth > 0 && pdfBaseWidth > 0
-      ? pdfBaseWidth / renderBaseWidth
+    renderBaseWidth > 0
+      ? visiblePdfBaseWidth / renderBaseWidth
       : 1;
+  const loadingShellWidth = visiblePdfBaseWidth * zoom;
 
   return (
     <div
@@ -1105,27 +1128,40 @@ export default function DocumentPage() {
         {/* Document content */}
         <div ref={pdfScrollRef} className="flex-1 overflow-y-auto overflow-x-auto px-4 py-4">
           {docLoading ? (
-            <div className="flex flex-col items-center gap-3">
-              {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="animate-pulse rounded-lg bg-white"
-                  style={{ width: "100%", aspectRatio: "1 / 1.414", boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)" }}
-                />
-              ))}
-            </div>
+            <PdfLoadingShell visibleWidth={loadingShellWidth} />
           ) : pdfUrl ? (
-            <PdfViewer
-              url={pdfUrl}
-              onPageChange={handlePageChange}
-              currentPage={scrollToPage}
-              pageWidth={renderPdfWidth}
-              displayScale={livePdfScale}
-              renderAllPages={searchOpen || searchQuery.trim().length > 0}
-              initialRenderCount={3}
-              renderBatchSize={4}
-              scrollContainerRef={pdfScrollRef}
-            />
+            <div className="relative flex flex-col items-center">
+              {pdfLoadingShellVisible && (
+                <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
+                  <div
+                    className={`transition-opacity duration-200 ${
+                      pdfFirstPageReady ? "opacity-0" : "opacity-100"
+                    }`}
+                  >
+                    <PdfLoadingShell visibleWidth={loadingShellWidth} />
+                  </div>
+                </div>
+              )}
+              <div
+                className={`transition-opacity duration-200 ${
+                  pdfFirstPageReady ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                <PdfViewer
+                  url={pdfUrl}
+                  onPageChange={handlePageChange}
+                  currentPage={scrollToPage}
+                  pageWidth={renderPdfWidth}
+                  displayScale={livePdfScale}
+                  renderAllPages={searchOpen || searchQuery.trim().length > 0}
+                  initialRenderCount={3}
+                  renderBatchSize={4}
+                  scrollContainerRef={pdfScrollRef}
+                  loadingVisibleWidth={loadingShellWidth}
+                  onFirstPageRender={handlePdfFirstPageRender}
+                />
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <p className="font-app text-[14px] font-medium text-ink">No PDF available</p>
