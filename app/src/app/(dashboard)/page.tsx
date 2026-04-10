@@ -315,7 +315,7 @@ export default function AppDashboard() {
             <NextLink
               key={item.id}
               href={`/subject/${item.subject_id}/doc/${item.id}`}
-              className="flex items-center gap-3 rounded-xl border border-black/5 bg-white px-4 py-3 shadow-xs transition-all hover:shadow-md hover:border-black/8"
+              className="flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 transition-all hover:bg-black/[0.03] hover:border-black/6 hover:shadow-sm"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cream-dark/50 text-[10px] font-semibold text-ink-muted">
                 {item.type.toUpperCase()}

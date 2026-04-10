@@ -80,6 +80,16 @@ export default function NoteEditor({
     if (editor) debouncedSave(val || "Untitled Note", editor.getHTML());
   };
 
+  // Scroll to bottom when editor mounts (e.g. after content appended externally)
+  const editorScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editor && initialContent && editorScrollRef.current) {
+      setTimeout(() => {
+        editorScrollRef.current?.scrollTo({ top: editorScrollRef.current.scrollHeight, behavior: "smooth" });
+      }, 100);
+    }
+  }, [editor]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!editor) return null;
 
   return (
@@ -158,7 +168,7 @@ export default function NoteEditor({
       </div>
 
       {/* Editor */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={editorScrollRef} className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
     </div>
