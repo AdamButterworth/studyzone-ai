@@ -305,7 +305,7 @@ export default function AppDashboard() {
           <h2 className="text-[17px] font-app-heading">Recents</h2>
         </div>
 
-        <div className="mt-4 space-y-2">
+        <div className="mt-4 space-y-0">
           {recents.length === 0 && !loading && (
             <p className="py-4 text-center text-sm text-ink-muted">
               No recent documents yet
