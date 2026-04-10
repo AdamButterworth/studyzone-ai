@@ -58,7 +58,6 @@ export default function AppDashboard() {
     if (fetchedFor.current === user.id) return;
     fetchedFor.current = user.id;
 
-    console.log("Dashboard fetch starting:", { userId: user.id, authLoading });
 
     const fetchData = async () => {
       try {
@@ -73,7 +72,6 @@ export default function AppDashboard() {
           console.error("Subjects query failed:", { userId: user.id, code: subjectsError.code, message: subjectsError.message });
           setError("Failed to load subjects");
         } else {
-          console.log("Subjects loaded:", { userId: user.id, count: subjectsData?.length ?? 0 });
           setSubjects((subjectsData ?? []).map((s) => ({ ...s, document_count: 0 })));
 
           // Fetch real document counts

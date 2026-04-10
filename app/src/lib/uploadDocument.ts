@@ -111,7 +111,6 @@ export async function uploadDocument(
     body: { document_id: documentId },
   }).then((res) => {
     if (res.error) console.error("Processing trigger failed:", res.error);
-    else console.log("Processing started for:", documentId);
   });
 
   return { documentId, title };

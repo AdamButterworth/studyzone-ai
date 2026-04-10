@@ -211,9 +211,13 @@ export default function DocumentPage() {
   const [subjectName, setSubjectName] = useState("");
   const [docLoading, setDocLoading] = useState(true);
   const titleSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const docFetchedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
+    // Skip re-fetch if we already loaded this doc (prevents reload on auth refresh)
+    if (docFetchedRef.current === docId && pdfUrl) return;
+
     const fetchDoc = async () => {
       const [docResult, subjectResult] = await Promise.all([
         supabase
@@ -238,12 +242,10 @@ export default function DocumentPage() {
         if (urlData?.signedUrl) setPdfUrl(urlData.signedUrl);
       }
       setDocLoading(false);
+      docFetchedRef.current = docId;
 
       // Update last_viewed_at
-      supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId).then(({ error }) => {
-        if (error) console.error("Failed to update last_viewed_at:", error);
-        else console.log("Updated last_viewed_at for:", docId);
-      });
+      supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId);
     };
     fetchDoc();
   }, [user, docId, subjectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1455,8 +1457,8 @@ export default function DocumentPage() {
                   pageWidth={renderPdfWidth}
                   displayScale={livePdfScale}
                   renderAllPages={searchOpen || searchQuery.trim().length > 0}
-                  initialRenderCount={3}
-                  renderBatchSize={4}
+                  initialRenderCount={5}
+                  renderBatchSize={8}
                   scrollContainerRef={pdfScrollRef}
                   loadingVisibleWidth={loadingShellWidth}
                   onFirstPageRender={handlePdfFirstPageRender}

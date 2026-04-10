@@ -72,7 +72,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         const sessionUser = session?.user ?? null;
-        console.log("Auth bootstrap:", sessionUser?.id ?? "no session");
 
         if (mounted) {
           setUser(sessionUser);
@@ -103,7 +102,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
-      console.log("Auth state change:", event, currentUser?.id ?? "no user");
 
       if (!mounted) return;
 

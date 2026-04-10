@@ -238,7 +238,6 @@ export default function SubjectPage() {
     let hasError = false;
 
     for (const file of Array.from(files)) {
-      console.log("Uploading:", file.name, file.type, file.size);
       const result = await uploadDocument(supabase, file, user.id, id);
 
       if (result.error) {
@@ -248,7 +247,6 @@ export default function SubjectPage() {
         continue;
       }
 
-      console.log("Upload success:", result.documentId, result.title);
 
       // Track processing in toast
       addJob(result.documentId, result.title);
