@@ -132,6 +132,7 @@ interface PdfViewerProps {
   renderAllPages?: boolean;
   initialRenderCount?: number;
   renderBatchSize?: number;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export default function PdfViewer({
@@ -143,6 +144,7 @@ export default function PdfViewer({
   renderAllPages = false,
   initialRenderCount = 3,
   renderBatchSize = 4,
+  scrollContainerRef,
 }: PdfViewerProps) {
   const [numPages, setNumPages] = useState(0);
   const [visiblePages, setVisiblePages] = useState(0);
@@ -178,17 +180,18 @@ export default function PdfViewer({
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
 
+    const root = scrollContainerRef?.current || null;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
           setVisiblePages((prev) => Math.min(prev + renderBatchSize, numPages));
         }
       },
-      { rootMargin: "800px" }
+      { root, rootMargin: "800px" }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [numPages, renderAllPages, renderBatchSize]);
+  }, [numPages, renderAllPages, renderBatchSize, scrollContainerRef]);
 
   /* ── Track which page is visible (current-page indicator) ── */
   useEffect(() => {

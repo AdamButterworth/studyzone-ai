@@ -932,6 +932,7 @@ export default function DocumentPage() {
               renderAllPages={searchOpen || searchQuery.trim().length > 0}
               initialRenderCount={3}
               renderBatchSize={4}
+              scrollContainerRef={pdfScrollRef}
             />
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1173,6 +1174,34 @@ export default function DocumentPage() {
           {activeTab?.type === "chat" && (
             <>
               <div className="flex-1 overflow-y-auto px-5 py-5">
+                {messages.length === 0 && !chatLoading && (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cream-dark/60 mb-4">
+                      <MessageSquare size={20} className="text-ink/50" />
+                    </div>
+                    <p className="font-app text-[15px] font-medium text-ink mb-1">
+                      Ask about this document
+                    </p>
+                    <p className="font-app text-[13px] text-ink-muted mb-6 max-w-[260px]">
+                      Get explanations, find key concepts, or test your understanding.
+                    </p>
+                    <div className="flex flex-col gap-2 w-full max-w-[280px]">
+                      {[
+                        "What are the main ideas in this document?",
+                        "Explain the key concepts simply",
+                        "What should I focus on for an exam?",
+                      ].map((q) => (
+                        <button
+                          key={q}
+                          onClick={() => sendChatMessage(q)}
+                          className="rounded-xl border border-black/6 bg-white px-4 py-2.5 text-left font-app text-[13px] text-ink/80 shadow-xs transition-all hover:border-black/10 hover:shadow-sm"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-5">
                   {messages.map((msg) => (
                     <div
@@ -1192,6 +1221,12 @@ export default function DocumentPage() {
                             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "150ms" }} />
                             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "300ms" }} />
                           </div>
+                        ) : msg.role === "ai" ? (
+                          <div className="prose-chat">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.text}
+                            </ReactMarkdown>
+                          </div>
                         ) : (
                           <p className="whitespace-pre-wrap">{msg.text}</p>
                         )}
@@ -1201,32 +1236,41 @@ export default function DocumentPage() {
                   <div ref={chatEndRef} />
                 </div>
               </div>
-              {/* Chat input — organic pill */}
+              {/* Chat input */}
               <div className="shrink-0 px-4 pb-4 pt-2">
-                <label className="flex cursor-text items-center gap-2 rounded-full border border-black/8 bg-cream-dark/20 px-4 py-2.5 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
-                  <input
-                    type="text"
+                <div className="flex items-end gap-2 rounded-[24px] border border-black/8 bg-white px-4 py-2.5 shadow-sm transition-all focus-within:border-black/14 focus-within:shadow-md">
+                  <textarea
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && !chatLoading && handleSendMessage()
-                    }
-                    placeholder="Ask about this document..."
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey && !chatLoading) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder="Ask anything..."
                     disabled={chatLoading}
-                    className="w-full bg-transparent font-app text-[14px] outline-none placeholder:text-ink-muted/50 disabled:opacity-60"
+                    rows={1}
+                    className="min-h-[36px] flex-1 resize-none bg-transparent py-1.5 font-app text-[14px] leading-relaxed outline-none placeholder:text-ink-muted disabled:opacity-60"
+                    style={{ maxHeight: 120 }}
+                    onInput={(e) => {
+                      const t = e.currentTarget;
+                      t.style.height = "auto";
+                      t.style.height = Math.min(t.scrollHeight, 120) + "px";
+                    }}
                   />
                   <button
                     onClick={handleSendMessage}
                     disabled={chatLoading}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                    className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
                       chatInput.trim() && !chatLoading
                         ? "bg-ink text-white hover:bg-ink/80"
-                        : "text-ink-muted/40"
+                        : "bg-cream-dark/60 text-ink-muted/40"
                     }`}
                   >
-                    <ArrowRight size={13} />
+                    <ArrowRight size={14} />
                   </button>
-                </label>
+                </div>
               </div>
             </>
           )}
