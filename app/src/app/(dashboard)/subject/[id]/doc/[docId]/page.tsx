@@ -31,6 +31,9 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import PdfLoadingShell from "@/components/app/PdfLoadingShell";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -1756,7 +1759,7 @@ export default function DocumentPage() {
                           </div>
                         ) : msg.role === "ai" ? (
                           <div className="prose-chat">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                               {msg.text}
                             </ReactMarkdown>
                           </div>
@@ -1843,7 +1846,7 @@ export default function DocumentPage() {
                 {/* Streaming / rendered markdown */}
                 {summaryContent !== null && summaryContent !== "" && (
                   <div className="prose-summary font-app text-[14px] leading-[1.8] text-ink/90">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
                       {summaryContent}
                     </ReactMarkdown>
                   </div>
