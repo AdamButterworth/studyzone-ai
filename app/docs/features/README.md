@@ -6,7 +6,7 @@ Status of each feature on the document page right panel.
 |---|---|---|
 | [Chat](chat.md) | ✅ Done | RAG-powered Q&A from document |
 | [Summary](summary.md) | ✅ Done | One-click document summary with markdown |
-| [Lesson Plan](lesson-plan.md) | 📋 Planned | AI-generated guided lesson steps |
+| [Lesson Plan](lesson-plan.md) | 📋 Planned | Per-doc + subject-level structured study plans |
 | [Notes](notes.md) | 📋 Planned | Simple note persistence per document |
 | [Markdown Rendering](markdown-rendering.md) | 📋 TODO | Markdown in chat, LaTeX, code highlighting |
 | [Highlight Actions](highlight-actions.md) | 📋 TODO | Select PDF text → ask, save to notes, highlight |
