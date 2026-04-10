@@ -1,20 +1,23 @@
 # Feature Plans
 
-Status of each feature on the document page right panel.
+Status of each feature.
 
-| Feature | V1 Status | Description |
-|---|---|---|
-| [Chat](chat.md) | ✅ Done | RAG-powered Q&A from document |
-| [Summary](summary.md) | ✅ Done | One-click document summary with markdown |
-| [Lesson Plan](lesson-plan.md) | 📋 Planned | Per-doc + subject-level structured study plans |
-| [Notes](notes.md) | 📋 Planned | Simple note persistence per document |
-| [Markdown Rendering](markdown-rendering.md) | 📋 TODO | Markdown in chat, LaTeX, code highlighting |
-| [Highlight Actions](highlight-actions.md) | 📋 TODO | Select PDF text → ask, save to notes, highlight |
-| [UI Polish](ui-polish.md) | 📋 TODO | Brighter, larger fonts, breathing room (NotebookLM reference) |
+| Feature | Priority | Status | Description |
+|---|---|---|---|
+| [Chat](chat.md) | P0 | ✅ Done | RAG-powered Q&A from document |
+| [Summary](summary.md) | P0 | ✅ Done | One-click document summary with markdown |
+| [Lesson Plan](lesson-plan.md) | **P0** | 🔜 Next | Per-doc + **subject-level structured study plans** |
+| [Notes](notes.md) | P1 | 📋 Planned | Simple note persistence per document |
+| [Markdown Rendering](markdown-rendering.md) | P1 | 📋 TODO | LaTeX equations, code highlighting |
+| [Highlight Actions](highlight-actions.md) | P2 | 📋 TODO | Select PDF text → ask, save to notes, highlight |
+| [UI Polish](ui-polish.md) | P2 | 📋 TODO | Ongoing refinements |
 
 ## Build order
 1. ~~Chat~~ ✅
 2. ~~Summary~~ ✅
-3. **Markdown in chat** ← next quick win
-4. Notes (quick — just DB persistence)
-5. Lesson Plan
+3. ~~Markdown in chat~~ ✅
+4. **Subject-level lesson plan** ← P0, next
+5. Per-document lesson plan
+6. Notes persistence
+7. LaTeX rendering
+8. Highlight actions
