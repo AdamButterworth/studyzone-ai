@@ -208,7 +208,7 @@ export default function PdfViewer({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [numPages, renderAllPages, renderBatchSize, scrollContainerRef]);
+  }, [numPages, visiblePages, renderAllPages, renderBatchSize, scrollContainerRef]);
 
   /* ── Track which page is visible (current-page indicator) ── */
   useEffect(() => {
