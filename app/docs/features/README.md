@@ -25,6 +25,7 @@
 | 4 | Copy AI replies to notes | P1 | Hover button on AI messages → add to note |
 | 5 | Reply to specific part | P1 | Select text in AI response → follow-up or copy to note |
 | 6 | [Rich Notes](rich-notes.md) | P1 | Images in notes, source-linked quotes, drag from PDF |
+| 7 | Image in chat input | P1 | Paste/upload images in chat to ask questions about diagrams |
 | 7 | [PDF Stability](pdf-stability.md) | P1 | Smooth loading, no reload on nav, no jump on resize |
 | 7 | [UI Polish](ui-polish.md) | P2 | Ongoing — mobile, animations, polish |
 | 7 | Upload from dashboard | P2 | Upload PDF from main page (auto-create subject) |
