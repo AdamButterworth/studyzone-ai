@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Plus,
@@ -38,7 +38,12 @@ interface ContentItem {
   preview: string;
   added: string;
   lastViewed: string;
+  createdAt: string; // raw ISO for sorting
+  lastViewedAt: string | null; // raw ISO for sorting
 }
+
+type SortField = "name" | "type" | "added" | "viewed";
+type SortDir = "asc" | "desc";
 
 function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
@@ -61,6 +66,7 @@ export default function SubjectPage() {
   const { user, loading: authLoading } = useAuth();
   const supabase = createClient();
   const router = useRouter();
+  const pathname = usePathname();
   const { addJob } = useProcessing();
 
   const [subjectName, setSubjectName] = useState("");
@@ -88,6 +94,37 @@ export default function SubjectPage() {
   const addMenuRef = useRef<HTMLDivElement>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [sortField, setSortField] = useState<SortField>("added");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
+
+  const sortedContent = [...content].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    switch (sortField) {
+      case "name":
+        return dir * a.name.localeCompare(b.name);
+      case "type":
+        return dir * a.type.localeCompare(b.type);
+      case "added":
+        return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      case "viewed": {
+        const aTime = a.lastViewedAt ? new Date(a.lastViewedAt).getTime() : 0;
+        const bTime = b.lastViewedAt ? new Date(b.lastViewedAt).getTime() : 0;
+        return dir * (aTime - bTime);
+      }
+      default:
+        return 0;
+    }
+  });
+
   const isEmpty = content.length === 0 && !loading;
 
   const mapDocs = (docs: any[]): ContentItem[] =>
@@ -99,6 +136,8 @@ export default function SubjectPage() {
       preview: d.raw_text?.slice(0, 120) || "",
       added: timeAgo(d.created_at),
       lastViewed: d.last_viewed_at ? timeAgo(d.last_viewed_at) : "—",
+      createdAt: d.created_at,
+      lastViewedAt: d.last_viewed_at || null,
     }));
 
   /* Load subject + documents from DB (parallel, paginated) */
@@ -149,7 +188,7 @@ export default function SubjectPage() {
     };
 
     fetchData();
-  }, [user, authLoading, id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, authLoading, id, pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMore = async () => {
     setLoadingMore(true);
@@ -232,6 +271,8 @@ export default function SubjectPage() {
           preview: "",
           added: "Just now",
           lastViewed: "—",
+          createdAt: new Date().toISOString(),
+          lastViewedAt: null,
         },
         ...prev,
       ]);
@@ -356,6 +397,8 @@ export default function SubjectPage() {
       preview: pasteToast.text.slice(0, 120),
       added: "Just now",
       lastViewed: "Just now",
+      createdAt: new Date().toISOString(),
+      lastViewedAt: new Date().toISOString(),
     };
     setContent((prev) => [newItem, ...prev]);
     setPasteToast(null);
@@ -546,17 +589,25 @@ export default function SubjectPage() {
           /* ─── List View ─── */
           <div>
             {/* Column headers */}
-            <div className="flex items-center gap-4 border-b border-black/5 px-3 pb-2.5 font-app text-[13px] text-ink-muted">
-              <span className="flex-1">Name</span>
-              <span className="w-14 text-center">Type</span>
-              <span className="hidden w-28 text-right md:block">Added</span>
-              <span className="hidden w-28 text-right md:block">Viewed</span>
+            <div className="flex items-center gap-4 border-b border-black/5 px-3 pb-2.5 font-app text-[13px] text-ink-muted select-none">
+              <button onClick={() => toggleSort("name")} className={`flex-1 text-left transition-colors hover:text-ink ${sortField === "name" ? "text-ink font-medium" : ""}`}>
+                Name {sortField === "name" && (sortDir === "asc" ? "↑" : "↓")}
+              </button>
+              <button onClick={() => toggleSort("type")} className={`w-14 text-center transition-colors hover:text-ink ${sortField === "type" ? "text-ink font-medium" : ""}`}>
+                Type {sortField === "type" && (sortDir === "asc" ? "↑" : "↓")}
+              </button>
+              <button onClick={() => toggleSort("added")} className={`hidden w-28 text-right transition-colors hover:text-ink md:block ${sortField === "added" ? "text-ink font-medium" : ""}`}>
+                Added {sortField === "added" && (sortDir === "asc" ? "↑" : "↓")}
+              </button>
+              <button onClick={() => toggleSort("viewed")} className={`hidden w-28 text-right transition-colors hover:text-ink md:block ${sortField === "viewed" ? "text-ink font-medium" : ""}`}>
+                Viewed {sortField === "viewed" && (sortDir === "asc" ? "↑" : "↓")}
+              </button>
               <span className="w-8" />
             </div>
 
             {/* Rows */}
             <div>
-              {content.map((item) => (
+              {sortedContent.map((item) => (
                 <div key={item.id} className="relative">
                   <Link
                     href={`/subject/${id}/doc/${item.id}`}
@@ -693,7 +744,7 @@ export default function SubjectPage() {
           /* ─── Grid View ─── */
           <>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-              {content.map((item) => (
+              {sortedContent.map((item) => (
                 <Link
                   key={item.id}
                   href={`/subject/${id}/doc/${item.id}`}

@@ -25,6 +25,7 @@ import {
   Maximize2,
   Minimize2,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -74,6 +75,7 @@ interface Tab {
   id: string;
   type: TabType;
   label: string;
+  chatId?: string; // DB id for persisted chat threads
 }
 
 interface SavedSet {
@@ -215,6 +217,12 @@ export default function DocumentPage() {
         if (urlData?.signedUrl) setPdfUrl(urlData.signedUrl);
       }
       setDocLoading(false);
+
+      // Update last_viewed_at
+      supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId).then(({ error }) => {
+        if (error) console.error("Failed to update last_viewed_at:", error);
+        else console.log("Updated last_viewed_at for:", docId);
+      });
     };
     fetchDoc();
   }, [user, docId, subjectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -379,9 +387,47 @@ export default function DocumentPage() {
   const isHome = !activeTab;
 
   /* ── Tab state ── */
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatMessages, setChatMessages] = useState<Record<string, Message[]>>({});
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+  const [renameTabValue, setRenameTabValue] = useState("");
+
+  const startRenameTab = (tabId: string, currentLabel: string) => {
+    setRenamingTabId(tabId);
+    setRenameTabValue(currentLabel);
+  };
+
+  const commitRenameTab = async () => {
+    if (!renamingTabId || !renameTabValue.trim()) {
+      setRenamingTabId(null);
+      return;
+    }
+    const tab = tabs.find((t) => t.id === renamingTabId);
+    const newLabel = renameTabValue.trim();
+
+    setTabs((prev) => prev.map((t) => t.id === renamingTabId ? { ...t, label: newLabel } : t));
+
+    // Update DB if it's a persisted chat
+    if (tab?.chatId) {
+      await supabase.from("chats").update({ title: newLabel }).eq("id", tab.chatId);
+      // Update in resources list too
+      setSavedResources((prev) => prev.map((r) => r.id === tab.chatId ? { ...r, title: newLabel } : r));
+    }
+
+    setRenamingTabId(null);
+  };
+
+  // Get messages for the active chat tab
+  const activeChatTabId = activeTab?.type === "chat" ? activeTab.id : null;
+  const messages = activeChatTabId ? (chatMessages[activeChatTabId] || []) : [];
+  const setMessages = (updater: Message[] | ((prev: Message[]) => Message[])) => {
+    if (!activeChatTabId) return;
+    setChatMessages((prev) => ({
+      ...prev,
+      [activeChatTabId]: typeof updater === "function" ? updater(prev[activeChatTabId] || []) : updater,
+    }));
+  };
 
   /* ── Summary state ── */
   const [summaryContent, setSummaryContent] = useState<string | null>(null);
@@ -392,7 +438,29 @@ export default function DocumentPage() {
 
   /* ── Resources (real data for Learn tab) ── */
   const [savedResources, setSavedResources] = useState<SavedSet[]>([]);
+  const [resourceRefresh, setResourceRefresh] = useState(0);
   const [resourceMenuId, setResourceMenuId] = useState<string | null>(null);
+  const [renamingResourceId, setRenamingResourceId] = useState<string | null>(null);
+  const [renameResourceValue, setRenameResourceValue] = useState("");
+
+  const commitRenameResource = async () => {
+    if (!renamingResourceId || !renameResourceValue.trim()) {
+      setRenamingResourceId(null);
+      return;
+    }
+    const resource = savedResources.find((r) => r.id === renamingResourceId);
+    const newTitle = renameResourceValue.trim();
+
+    setSavedResources((prev) => prev.map((r) => r.id === renamingResourceId ? { ...r, title: newTitle } : r));
+
+    if (resource?.type === "chat") {
+      await supabase.from("chats").update({ title: newTitle }).eq("id", renamingResourceId);
+      // Update matching tab label if open
+      setTabs((prev) => prev.map((t) => t.chatId === renamingResourceId ? { ...t, label: newTitle } : t));
+    }
+
+    setRenamingResourceId(null);
+  };
 
   useEffect(() => {
     if (!resourceMenuId) return;
@@ -401,45 +469,78 @@ export default function DocumentPage() {
     return () => document.removeEventListener("click", close);
   }, [resourceMenuId]);
 
-  const handleDeleteResource = async (resourceId: string) => {
+  const handleDeleteResource = async (resourceId: string, resourceType: TabType) => {
     setResourceMenuId(null);
     const confirmed = window.confirm("Are you sure you want to delete this resource?");
     if (!confirmed) return;
 
+    const table = resourceType === "chat" ? "chats" : "document_summaries";
     const { error } = await supabase
-      .from("document_summaries")
+      .from(table)
       .delete()
       .eq("id", resourceId);
 
     if (!error) {
       setSavedResources((prev) => prev.filter((r) => r.id !== resourceId));
-      // Reset summary state so it regenerates on next open
-      setSummaryContent(null);
-      setSummaryChecked(false);
+      if (resourceType === "summary") {
+        setSummaryContent(null);
+        setSummaryChecked(false);
+      }
+      if (resourceType === "chat") {
+        // Close the tab if it's open
+        const openTab = tabs.find((t) => t.chatId === resourceId);
+        if (openTab) {
+          setTabs((prev) => prev.filter((t) => t.id !== openTab.id));
+          if (activeTabId === openTab.id) setActiveTabId(null);
+        }
+      }
     }
   };
 
   useEffect(() => {
     if (!user) return;
     const fetchResources = async () => {
-      const { data } = await supabase
-        .from("document_summaries")
-        .select("id, created_at")
-        .eq("document_id", docId)
-        .order("created_at", { ascending: false });
+      const [summariesResult, chatsResult] = await Promise.all([
+        supabase
+          .from("document_summaries")
+          .select("id, created_at")
+          .eq("document_id", docId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("chats")
+          .select("id, title, created_at")
+          .eq("document_id", docId)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      if (data) {
-        const resources: SavedSet[] = data.map((s: { id: string; created_at: string }) => ({
-          id: s.id,
-          type: "summary" as TabType,
-          title: `Summary`,
-          detail: new Date(s.created_at).toLocaleDateString(),
-        }));
-        setSavedResources(resources);
+      const resources: SavedSet[] = [];
+
+      if (chatsResult.data) {
+        for (const c of chatsResult.data) {
+          resources.push({
+            id: c.id,
+            type: "chat" as TabType,
+            title: c.title || "Chat",
+            detail: new Date(c.created_at).toLocaleDateString(),
+          });
+        }
       }
+
+      if (summariesResult.data) {
+        for (const s of summariesResult.data) {
+          resources.push({
+            id: s.id,
+            type: "summary" as TabType,
+            title: "Summary",
+            detail: new Date(s.created_at).toLocaleDateString(),
+          });
+        }
+      }
+
+      setSavedResources(resources);
     };
     fetchResources();
-  }, [user, docId, summaryGenerating]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, docId, summaryGenerating, resourceRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lessonSteps, setLessonSteps] = useState(MOCK_LESSON);
   const [notes, setNotes] = useState("");
   const [homeQuery, setHomeQuery] = useState("");
@@ -576,15 +677,52 @@ export default function DocumentPage() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendChatMessage = async (text: string) => {
-    if (!text.trim() || chatLoading) return;
+  const sendChatMessage = async (text: string, tabId?: string) => {
+    if (!text.trim() || chatLoading || !user) return;
+    const targetTabId = tabId || activeChatTabId;
+    if (!targetTabId) return;
+
+    const currentTab = tabs.find((t) => t.id === targetTabId);
+    const currentMessages = chatMessages[targetTabId] || [];
+
+    // Create chat thread in DB if this is the first message
+    let chatId = currentTab?.chatId;
+    if (!chatId) {
+      const title = text.trim().slice(0, 60) + (text.trim().length > 60 ? "..." : "");
+      const { data: chatRow, error: chatErr } = await supabase
+        .from("chats")
+        .insert({ document_id: docId, user_id: user.id, title })
+        .select("id")
+        .single();
+
+      if (chatErr) console.error("Failed to create chat:", chatErr);
+
+      if (chatRow) {
+        chatId = chatRow.id;
+        setTabs((prev) => prev.map((t) => t.id === targetTabId ? { ...t, chatId: chatRow.id, label: title } : t));
+      }
+    }
 
     const userMsg: Message = { id: Date.now().toString(), role: "user", text: text.trim() };
-    setMessages((prev) => [...prev, userMsg]);
+    setChatMessages((prev) => ({
+      ...prev,
+      [targetTabId]: [...(prev[targetTabId] || []), userMsg],
+    }));
     setChatLoading(true);
 
+    // Save user message to DB
+    if (chatId) {
+      const { error: userMsgErr } = await supabase.from("chat_messages").insert({ chat_id: chatId, role: "user", content: text.trim() });
+      if (userMsgErr) console.error("Failed to save user message:", userMsgErr);
+    }
+
     const aiMsgId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { id: aiMsgId, role: "ai", text: "" }]);
+    setChatMessages((prev) => ({
+      ...prev,
+      [targetTabId]: [...(prev[targetTabId] || []), { id: aiMsgId, role: "ai", text: "" }],
+    }));
+
+    let fullAiText = "";
 
     try {
       const res = await fetch("/api/chat", {
@@ -593,15 +731,18 @@ export default function DocumentPage() {
         body: JSON.stringify({
           message: text.trim(),
           document_id: docId,
-          history: messages.slice(-10),
+          history: currentMessages.slice(-10),
         }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        setMessages((prev) =>
-          prev.map((m) => (m.id === aiMsgId ? { ...m, text: `Error: ${err.error || "Something went wrong"}` } : m))
-        );
+        setChatMessages((prev) => ({
+          ...prev,
+          [targetTabId]: (prev[targetTabId] || []).map((m) =>
+            m.id === aiMsgId ? { ...m, text: `Error: ${err.error || "Something went wrong"}` } : m
+          ),
+        }));
         setChatLoading(false);
         return;
       }
@@ -626,19 +767,33 @@ export default function DocumentPage() {
           try {
             const { text: chunk } = JSON.parse(data);
             if (chunk) {
-              setMessages((prev) =>
-                prev.map((m) => (m.id === aiMsgId ? { ...m, text: m.text + chunk } : m))
-              );
+              fullAiText += chunk;
+              const captured = fullAiText;
+              setChatMessages((prev) => ({
+                ...prev,
+                [targetTabId]: (prev[targetTabId] || []).map((m) =>
+                  m.id === aiMsgId ? { ...m, text: captured } : m
+                ),
+              }));
             }
           } catch {
             // skip
           }
         }
       }
+
+      // Save AI message to DB
+      if (chatId && fullAiText.trim()) {
+        const { error: aiMsgErr } = await supabase.from("chat_messages").insert({ chat_id: chatId, role: "assistant", content: fullAiText });
+        if (aiMsgErr) console.error("Failed to save AI message:", aiMsgErr);
+      }
     } catch {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === aiMsgId ? { ...m, text: "Failed to get a response. Please try again." } : m))
-      );
+      setChatMessages((prev) => ({
+        ...prev,
+        [targetTabId]: (prev[targetTabId] || []).map((m) =>
+          m.id === aiMsgId ? { ...m, text: "Failed to get a response. Please try again." } : m
+        ),
+      }));
     }
 
     setChatLoading(false);
@@ -655,11 +810,41 @@ export default function DocumentPage() {
     if (!homeQuery.trim()) return;
     const text = homeQuery;
     setHomeQuery("");
-    // Open a new chat tab with the question
     const newTab: Tab = { id: Date.now().toString(), type: "chat", label: "Chat" };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
-    sendChatMessage(text);
+    // Need to send with the new tab id since activeChatTabId hasn't updated yet
+    setTimeout(() => sendChatMessage(text, newTab.id), 0);
+  };
+
+  // Load a saved chat thread into a tab
+  const openSavedChat = async (chatDbId: string, title: string) => {
+    // Check if already open
+    const existing = tabs.find((t) => t.chatId === chatDbId);
+    if (existing) {
+      setActiveTabId(existing.id);
+      return;
+    }
+
+    const newTab: Tab = { id: Date.now().toString(), type: "chat", label: title, chatId: chatDbId };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+
+    // Load messages from DB
+    const { data } = await supabase
+      .from("chat_messages")
+      .select("id, role, content, created_at")
+      .eq("chat_id", chatDbId)
+      .order("created_at", { ascending: true });
+
+    if (data) {
+      const msgs: Message[] = data.map((m: { id: string; role: string; content: string }) => ({
+        id: m.id,
+        role: m.role === "user" ? "user" as const : "ai" as const,
+        text: m.content,
+      }));
+      setChatMessages((prev) => ({ ...prev, [newTab.id]: msgs }));
+    }
   };
 
   /* ── Summary: fetch existing or auto-generate ── */
@@ -966,7 +1151,7 @@ export default function DocumentPage() {
           <div className="relative z-10 flex shrink-0 items-center border-b border-black/[0.04] px-4 py-2.5">
             {/* Home button */}
             <button
-              onClick={() => setActiveTabId(null)}
+              onClick={() => { setActiveTabId(null); setResourceRefresh((n) => n + 1); }}
               className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 font-app text-[12px] font-medium transition-all ${
                 isHome
                   ? "bg-cream-dark/60 text-ink ring-1 ring-black/[0.04]"
@@ -985,24 +1170,48 @@ export default function DocumentPage() {
                 const opt = TAB_OPTIONS.find((o) => o.type === tab.type);
                 const Icon = opt?.icon || MessageSquare;
                 return (
-                  <button
+                  <div
                     key={tab.id}
                     onClick={() => setActiveTabId(tab.id)}
-                    className={`group/tab flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 font-app text-[12px] font-medium transition-all ${
+                    className={`group/tab flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-3 py-2 font-app text-[12px] font-medium transition-all ${
                       activeTabId === tab.id
                         ? "bg-cream-dark/60 text-ink ring-1 ring-black/[0.04]"
                         : "text-ink-muted hover:bg-cream-dark/30 hover:text-ink-light hover:ring-1 hover:ring-black/[0.03]"
                     }`}
                   >
                     <Icon size={13} />
-                    {tab.label}
+                    {renamingTabId === tab.id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={renameTabValue}
+                        onChange={(e) => setRenameTabValue(e.target.value)}
+                        onBlur={commitRenameTab}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") commitRenameTab();
+                          if (e.key === "Escape") setRenamingTabId(null);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-20 rounded border border-black/10 bg-white px-1.5 py-0.5 text-[12px] outline-none focus:border-black/20"
+                      />
+                    ) : (
+                      <span
+                        className="max-w-[120px] truncate"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (tab.type === "chat") startRenameTab(tab.id, tab.label);
+                        }}
+                      >
+                        {tab.label}
+                      </span>
+                    )}
                     <span
                       onClick={(e) => closeTab(tab.id, e)}
                       className="ml-0.5 rounded p-0.5 opacity-0 transition-all hover:bg-cream-dark/60 group-hover/tab:opacity-100"
                     >
                       <X size={10} />
                     </span>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1093,9 +1302,12 @@ export default function DocumentPage() {
                       const Icon = opt?.icon || FileText;
                       return (
                         <div key={set.id} className="relative">
-                          <button
-                            onClick={() => addTab(set.type)}
-                            className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cream-dark/30"
+                          <div
+                            onClick={() => {
+                              if (renamingResourceId === set.id) return;
+                              set.type === "chat" ? openSavedChat(set.id, set.title) : addTab(set.type);
+                            }}
+                            className="group flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cream-dark/30"
                           >
                             <div
                               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${opt?.color || "bg-cream-dark/50"}`}
@@ -1106,9 +1318,25 @@ export default function DocumentPage() {
                               />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className="truncate font-app text-[13px] font-medium">
-                                {set.title}
-                              </p>
+                              {renamingResourceId === set.id ? (
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={renameResourceValue}
+                                  onChange={(e) => setRenameResourceValue(e.target.value)}
+                                  onBlur={commitRenameResource}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") commitRenameResource();
+                                    if (e.key === "Escape") setRenamingResourceId(null);
+                                  }}
+                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                  className="w-full truncate rounded-md border border-black/10 bg-white px-2 py-0.5 font-app text-[13px] font-medium outline-none focus:border-black/20"
+                                />
+                              ) : (
+                                <p className="truncate font-app text-[13px] font-medium">
+                                  {set.title}
+                                </p>
+                              )}
                               <p className="font-app text-[11px] text-ink-muted">
                                 {set.detail}
                               </p>
@@ -1122,14 +1350,27 @@ export default function DocumentPage() {
                             >
                               <MoreHorizontal size={14} />
                             </span>
-                          </button>
+                          </div>
                           {resourceMenuId === set.id && (
                             <div
                               onClick={(e) => e.stopPropagation()}
                               className="absolute right-2 top-10 z-20 min-w-[120px] rounded-xl border border-black/8 bg-white py-1 shadow-lg"
                             >
+                              {set.type === "chat" && (
+                                <button
+                                  onClick={() => {
+                                    setResourceMenuId(null);
+                                    setRenamingResourceId(set.id);
+                                    setRenameResourceValue(set.title);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-ink-light transition-colors hover:bg-cream-dark/50"
+                                >
+                                  <Pencil size={13} />
+                                  Rename
+                                </button>
+                              )}
                               <button
-                                onClick={() => handleDeleteResource(set.id)}
+                                onClick={() => handleDeleteResource(set.id, set.type)}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-50"
                               >
                                 <Trash2 size={13} />
