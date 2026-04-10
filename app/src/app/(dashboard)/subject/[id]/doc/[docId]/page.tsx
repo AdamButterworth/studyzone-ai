@@ -818,6 +818,8 @@ export default function DocumentPage() {
   };
 
   // Load a saved chat thread into a tab
+  const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
+
   const openSavedChat = async (chatDbId: string, title: string) => {
     // Check if already open
     const existing = tabs.find((t) => t.chatId === chatDbId);
@@ -829,15 +831,18 @@ export default function DocumentPage() {
     const newTab: Tab = { id: Date.now().toString(), type: "chat", label: title, chatId: chatDbId };
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(newTab.id);
+    setLoadingChatId(newTab.id);
 
     // Load messages from DB
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("chat_messages")
       .select("id, role, content, created_at")
       .eq("chat_id", chatDbId)
       .order("created_at", { ascending: true });
 
-    if (data) {
+    if (error) console.error("Failed to load chat messages:", error);
+
+    if (data && data.length > 0) {
       const msgs: Message[] = data.map((m: { id: string; role: string; content: string }) => ({
         id: m.id,
         role: m.role === "user" ? "user" as const : "ai" as const,
@@ -845,6 +850,8 @@ export default function DocumentPage() {
       }));
       setChatMessages((prev) => ({ ...prev, [newTab.id]: msgs }));
     }
+
+    setLoadingChatId(null);
   };
 
   /* ── Summary: fetch existing or auto-generate ── */
@@ -1415,7 +1422,12 @@ export default function DocumentPage() {
           {activeTab?.type === "chat" && (
             <>
               <div className="flex-1 overflow-y-auto px-5 py-5">
-                {messages.length === 0 && !chatLoading && (
+                {loadingChatId === activeChatTabId && (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-muted/30 border-t-ink-muted" />
+                  </div>
+                )}
+                {messages.length === 0 && !chatLoading && loadingChatId !== activeChatTabId && (
                   <div className="flex flex-col items-center justify-center py-10 text-center">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cream-dark/60 mb-4">
                       <MessageSquare size={20} className="text-ink/50" />
