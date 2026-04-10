@@ -28,6 +28,8 @@ import {
   Minimize2,
   Copy,
   ChevronDown,
+  Layers,
+  HelpCircle,
   Trash2,
   Pencil,
 } from "lucide-react";
@@ -64,7 +66,7 @@ interface LessonStep {
   done: boolean;
 }
 
-type TabType = "chat" | "summary" | "notes" | "lesson";
+type TabType = "chat" | "summary" | "notes" | "lesson" | "flashcards" | "quiz";
 
 interface Tab {
   id: string;
@@ -127,6 +129,24 @@ const TAB_OPTIONS: {
     color: "bg-[#FFE4E6]",
     iconColor: "text-[#DC2626]",
     hoverBg: "hover:bg-[#FFE4E6]/50",
+  },
+  {
+    type: "flashcards",
+    label: "Flashcards",
+    desc: "Study cards",
+    icon: Layers,
+    color: "bg-[#FEF3C7]",
+    iconColor: "text-[#D97706]",
+    hoverBg: "hover:bg-[#FEF3C7]/50",
+  },
+  {
+    type: "quiz",
+    label: "Quiz",
+    desc: "Test yourself",
+    icon: HelpCircle,
+    color: "bg-[#E0E7FF]",
+    iconColor: "text-[#4F46E5]",
+    hoverBg: "hover:bg-[#E0E7FF]/50",
   },
 ];
 
@@ -2084,6 +2104,32 @@ export default function DocumentPage() {
                       : "Review Lesson"}
                 </div>
               </button>
+            </div>
+          )}
+
+          {/* ═══ FLASHCARDS TAB ═══ */}
+          {activeTab?.type === "flashcards" && (
+            <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#FEF3C7] mb-4">
+                <Layers size={20} className="text-[#D97706]" />
+              </div>
+              <p className="font-app text-[15px] font-medium text-ink mb-1">Flashcards</p>
+              <p className="font-app text-[13px] text-ink-muted max-w-[260px]">
+                AI-generated flashcards from this document. Coming soon.
+              </p>
+            </div>
+          )}
+
+          {/* ═══ QUIZ TAB ═══ */}
+          {activeTab?.type === "quiz" && (
+            <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E0E7FF] mb-4">
+                <HelpCircle size={20} className="text-[#4F46E5]" />
+              </div>
+              <p className="font-app text-[15px] font-medium text-ink mb-1">Quiz</p>
+              <p className="font-app text-[13px] text-ink-muted max-w-[260px]">
+                Test your understanding with AI-generated questions. Coming soon.
+              </p>
             </div>
           )}
         </div>
