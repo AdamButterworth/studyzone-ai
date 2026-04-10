@@ -16,8 +16,9 @@
 
 | # | Feature | Priority | Description |
 |---|---|---|---|
-| 1 | [Resource Organisation](resource-organisation.md) | **P0** | Filter chips on My Resources, subject-level resource view, cross-doc notes |
-| 2 | [Lesson Plan](lesson-plan.md) | **P0** | Per-doc + subject-level structured study plans |
+| 1 | [Multi-Format Content](multi-format-content.md) | **P0** | YouTube videos, PowerPoint, Word docs, images, audio |
+| 2 | [Resource Organisation](resource-organisation.md) | **P0** | Filter chips on My Resources, subject-level resource view, cross-doc notes |
+| 3 | [Lesson Plan](lesson-plan.md) | **P0** | Per-doc + subject-level structured study plans |
 | 3 | [Markdown Rendering](markdown-rendering.md) | P1 | LaTeX/math in chat + summary + notes, code highlighting |
 | 4 | Copy AI replies to notes | P1 | Hover button on AI messages → add to note |
 | 5 | Reply to specific part | P1 | Select text in AI response → follow-up or copy to note |
