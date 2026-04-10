@@ -231,3 +231,74 @@ html {
   margin: 0.5em 0;
   opacity: 0.85;
 }
+
+/* Note editor (Tiptap) styles */
+.prose-note p {
+  margin-bottom: 0.5em;
+}
+
+.prose-note p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  height: 0;
+}
+
+.prose-note h2 {
+  font-weight: 600;
+  font-size: 18px;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  color: var(--color-ink);
+}
+
+.prose-note strong {
+  font-weight: 600;
+}
+
+.prose-note em {
+  font-style: italic;
+}
+
+.prose-note ul {
+  list-style: disc;
+  padding-left: 1.4em;
+  margin-bottom: 0.5em;
+}
+
+.prose-note ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+  margin-bottom: 0.5em;
+}
+
+.prose-note li {
+  margin-bottom: 0.15em;
+}
+
+.prose-note blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.1);
+  padding-left: 1em;
+  margin: 0.5em 0;
+  color: var(--color-ink-light);
+}
+
+.prose-note code {
+  background: rgba(0, 0, 0, 0.04);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.prose-note .is-empty::before {
+  content: "Start typing your notes...";
+  color: rgba(0, 0, 0, 0.25);
+  float: left;
+  pointer-events: none;
+  height: 0;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}

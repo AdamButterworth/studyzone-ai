@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
+const NoteEditor = dynamic(() => import("@/components/app/NoteEditor"), { ssr: false });
 import {
   MessageSquare,
   FileText,
@@ -64,6 +65,7 @@ interface Tab {
   type: TabType;
   label: string;
   chatId?: string; // DB id for persisted chat threads
+  noteId?: string; // DB id for persisted notes
 }
 
 interface SavedSet {
@@ -82,38 +84,43 @@ const TAB_OPTIONS: {
   icon: typeof MessageSquare;
   color: string;
   iconColor: string;
+  hoverBg: string;
 }[] = [
   {
     type: "chat",
     label: "Chat",
     desc: "Ask questions",
     icon: MessageSquare,
-    color: "bg-cream-dark/80",
-    iconColor: "text-ink/70",
+    color: "bg-[#EDE8E3]",
+    iconColor: "text-[#5C5147]",
+    hoverBg: "hover:bg-[#EDE8E3]/60",
   },
   {
     type: "summary",
     label: "Summary",
     desc: "Key concepts",
     icon: FileText,
-    color: "bg-sky-light/80",
-    iconColor: "text-sky",
+    color: "bg-[#DBEAFE]",
+    iconColor: "text-[#2563EB]",
+    hoverBg: "hover:bg-[#DBEAFE]/50",
   },
   {
     type: "notes",
     label: "Notes",
     desc: "Your notes",
     icon: StickyNote,
-    color: "bg-mint-light/80",
-    iconColor: "text-mint",
+    color: "bg-[#D1FAE5]",
+    iconColor: "text-[#059669]",
+    hoverBg: "hover:bg-[#D1FAE5]/50",
   },
   {
     type: "lesson",
     label: "Lesson Plan",
     desc: "Guided learning",
     icon: ListChecks,
-    color: "bg-peach-light/80",
-    iconColor: "text-peach",
+    color: "bg-[#FFE4E6]",
+    iconColor: "text-[#DC2626]",
+    hoverBg: "hover:bg-[#FFE4E6]/50",
   },
 ];
 
@@ -343,9 +350,9 @@ export default function DocumentPage() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const addTab = (type: TabType) => {
-    // Reuse existing tab for summary/notes/lesson (not chat — multiple allowed)
-    if (type !== "chat") {
+  const addTab = async (type: TabType) => {
+    // Reuse existing tab for summary/lesson (not chat or notes — multiple allowed)
+    if (type !== "chat" && type !== "notes") {
       const existing = tabs.find((t) => t.type === type);
       if (existing) {
         setActiveTabId(existing.id);
@@ -353,6 +360,25 @@ export default function DocumentPage() {
         return;
       }
     }
+
+    // Notes: create a new note in DB first
+    if (type === "notes" && user) {
+      const { data: noteRow } = await supabase
+        .from("notes")
+        .insert({ document_id: docId, user_id: user.id, title: "New Note", content: "" })
+        .select("id")
+        .single();
+
+      if (noteRow) {
+        const newTab: Tab = { id: Date.now().toString(), type: "notes", label: "New Note", noteId: noteRow.id };
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabId(newTab.id);
+        setShowAddMenu(false);
+        setResourceRefresh((n) => n + 1);
+        return;
+      }
+    }
+
     const opt = TAB_OPTIONS.find((o) => o.type === type)!;
     const newTab: Tab = { id: Date.now().toString(), type, label: opt.label };
     setTabs((prev) => [...prev, newTab]);
@@ -443,8 +469,12 @@ export default function DocumentPage() {
 
     if (resource?.type === "chat") {
       await supabase.from("chats").update({ title: newTitle }).eq("id", renamingResourceId);
-      // Update matching tab label if open
       setTabs((prev) => prev.map((t) => t.chatId === renamingResourceId ? { ...t, label: newTitle } : t));
+    }
+    if (resource?.type === "notes") {
+      await supabase.from("notes").update({ title: newTitle }).eq("id", renamingResourceId);
+      setTabs((prev) => prev.map((t) => t.noteId === renamingResourceId ? { ...t, label: newTitle } : t));
+      setNoteData((prev) => prev[renamingResourceId] ? { ...prev, [renamingResourceId]: { ...prev[renamingResourceId], title: newTitle } } : prev);
     }
 
     setRenamingResourceId(null);
@@ -462,7 +492,7 @@ export default function DocumentPage() {
     const confirmed = window.confirm("Are you sure you want to delete this resource?");
     if (!confirmed) return;
 
-    const table = resourceType === "chat" ? "chats" : "document_summaries";
+    const table = resourceType === "chat" ? "chats" : resourceType === "notes" ? "notes" : "document_summaries";
     const { error } = await supabase
       .from(table)
       .delete()
@@ -475,8 +505,14 @@ export default function DocumentPage() {
         setSummaryChecked(false);
       }
       if (resourceType === "chat") {
-        // Close the tab if it's open
         const openTab = tabs.find((t) => t.chatId === resourceId);
+        if (openTab) {
+          setTabs((prev) => prev.filter((t) => t.id !== openTab.id));
+          if (activeTabId === openTab.id) setActiveTabId(null);
+        }
+      }
+      if (resourceType === "notes") {
+        const openTab = tabs.find((t) => t.noteId === resourceId);
         if (openTab) {
           setTabs((prev) => prev.filter((t) => t.id !== openTab.id));
           if (activeTabId === openTab.id) setActiveTabId(null);
@@ -488,7 +524,7 @@ export default function DocumentPage() {
   useEffect(() => {
     if (!user) return;
     const fetchResources = async () => {
-      const [summariesResult, chatsResult] = await Promise.all([
+      const [summariesResult, chatsResult, notesResult] = await Promise.all([
         supabase
           .from("document_summaries")
           .select("id, created_at")
@@ -499,6 +535,11 @@ export default function DocumentPage() {
           .select("id, title, created_at")
           .eq("document_id", docId)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("notes")
+          .select("id, title, updated_at")
+          .eq("document_id", docId)
+          .order("updated_at", { ascending: false }),
       ]);
 
       const resources: SavedSet[] = [];
@@ -510,6 +551,17 @@ export default function DocumentPage() {
             type: "chat" as TabType,
             title: c.title || "Chat",
             detail: new Date(c.created_at).toLocaleDateString(),
+          });
+        }
+      }
+
+      if (notesResult.data) {
+        for (const n of notesResult.data) {
+          resources.push({
+            id: n.id,
+            type: "notes" as TabType,
+            title: n.title || "New Note",
+            detail: new Date(n.updated_at).toLocaleDateString(),
           });
         }
       }
@@ -530,7 +582,7 @@ export default function DocumentPage() {
     fetchResources();
   }, [user, docId, summaryGenerating, resourceRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lessonSteps, setLessonSteps] = useState(MOCK_LESSON);
-  const [notes, setNotes] = useState("");
+  const [noteData, setNoteData] = useState<Record<string, { title: string; content: string }>>({});
   const [homeQuery, setHomeQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [editingPage, setEditingPage] = useState(false);
@@ -559,6 +611,7 @@ export default function DocumentPage() {
       setSearchResultCount(null);
       return;
     }
+
     // Clear previous highlights
     pdfScrollRef.current.querySelectorAll("mark[data-pdf-search]").forEach((el) => {
       const parent = el.parentNode;
@@ -871,6 +924,81 @@ export default function DocumentPage() {
 
     setLoadingChatId(null);
   };
+
+  // Open a saved note
+  const openSavedNote = async (noteDbId: string, title: string) => {
+    const existing = tabs.find((t) => t.noteId === noteDbId);
+    if (existing) {
+      setActiveTabId(existing.id);
+      return;
+    }
+
+    // Load fresh data from DB
+    const { data } = await supabase
+      .from("notes")
+      .select("title, content")
+      .eq("id", noteDbId)
+      .single();
+
+    if (data) {
+      setNoteData((prev) => ({ ...prev, [noteDbId]: { title: data.title || "New Note", content: data.content || "" } }));
+    }
+
+    const newTab: Tab = { id: Date.now().toString(), type: "notes", label: data?.title || title, noteId: noteDbId };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+  };
+
+  // Save note content (called by NoteEditor debounced)
+  const handleNoteSave = useCallback(async (noteId: string, title: string, content: string) => {
+    await supabase
+      .from("notes")
+      .update({ title, content, updated_at: new Date().toISOString() })
+      .eq("id", noteId);
+
+    // Update tab label
+    setTabs((prev) => prev.map((t) => t.noteId === noteId ? { ...t, label: title } : t));
+    // Update resources list
+    setSavedResources((prev) => prev.map((r) => r.id === noteId ? { ...r, title } : r));
+    // Update cached note data so re-opening shows correct title
+    setNoteData((prev) => ({ ...prev, [noteId]: { title, content } }));
+  }, [supabase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Delete note
+  const handleNoteDelete = useCallback(async (noteId: string) => {
+    await supabase.from("notes").delete().eq("id", noteId);
+
+    // Close the tab
+    const tab = tabs.find((t) => t.noteId === noteId);
+    if (tab) {
+      setTabs((prev) => prev.filter((t) => t.id !== tab.id));
+      if (activeTabId === tab.id) setActiveTabId(null);
+    }
+
+    // Remove from resources
+    setSavedResources((prev) => prev.filter((r) => r.id !== noteId));
+    setResourceRefresh((n) => n + 1);
+  }, [supabase, tabs, activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Load note data when note tab is active ── */
+  useEffect(() => {
+    if (activeTab?.type !== "notes" || !activeTab.noteId) return;
+    const nid = activeTab.noteId;
+    if (noteData[nid]) return; // already loaded
+
+    const loadNote = async () => {
+      const { data } = await supabase
+        .from("notes")
+        .select("title, content")
+        .eq("id", nid)
+        .single();
+
+      if (data) {
+        setNoteData((prev) => ({ ...prev, [nid]: { title: data.title || "New Note", content: data.content || "" } }));
+      }
+    };
+    loadNote();
+  }, [activeTab?.type, activeTab?.noteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Summary: fetch existing or auto-generate ── */
   useEffect(() => {
@@ -1191,7 +1319,7 @@ export default function DocumentPage() {
       >
         {/* Tab bar — only show when tabs exist */}
         {tabs.length > 0 && (
-          <div className="relative z-10 flex shrink-0 items-center border-b border-black/[0.04] px-4 py-2.5">
+          <div className="relative z-10 flex shrink-0 items-center border-b border-black/[0.04] px-4 py-2.5 overflow-hidden">
             {/* Home button */}
             <button
               onClick={() => { setActiveTabId(null); setResourceRefresh((n) => n + 1); }}
@@ -1208,7 +1336,7 @@ export default function DocumentPage() {
             <div className="mx-1 h-4 w-px bg-black/6" />
 
             {/* Open tabs */}
-            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: "none" }}>
               {tabs.map((tab) => {
                 const opt = TAB_OPTIONS.find((o) => o.type === tab.type);
                 const Icon = opt?.icon || MessageSquare;
@@ -1308,12 +1436,12 @@ export default function DocumentPage() {
                     <button
                       key={opt.type}
                       onClick={() => addTab(opt.type)}
-                      className="flex items-center gap-3 rounded-2xl border border-black/8 bg-white px-4 py-4 text-left shadow-sm transition-all hover:border-black/12 hover:shadow-md"
+                      className="flex items-center gap-3 rounded-2xl border border-black/6 bg-white px-4 py-4 text-left shadow-xs transition-all hover:bg-black/[0.03] hover:shadow-sm"
                     >
                       <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${opt.color}`}
                       >
-                        <opt.icon size={18} className={opt.iconColor} />
+                        <opt.icon size={20} strokeWidth={2} className={opt.iconColor} />
                       </div>
                       <div>
                         <p className="font-app text-[14px] font-medium">
@@ -1348,7 +1476,7 @@ export default function DocumentPage() {
                           <div
                             onClick={() => {
                               if (renamingResourceId === set.id) return;
-                              set.type === "chat" ? openSavedChat(set.id, set.title) : addTab(set.type);
+                              set.type === "chat" ? openSavedChat(set.id, set.title) : set.type === "notes" ? openSavedNote(set.id, set.title) : addTab(set.type);
                             }}
                             className="group flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-cream-dark/30"
                           >
@@ -1399,7 +1527,7 @@ export default function DocumentPage() {
                               onClick={(e) => e.stopPropagation()}
                               className="absolute right-2 top-10 z-20 min-w-[120px] rounded-xl border border-black/8 bg-white py-1 shadow-lg"
                             >
-                              {set.type === "chat" && (
+                              {(set.type === "chat" || set.type === "notes") && (
                                 <button
                                   onClick={() => {
                                     setResourceMenuId(null);
@@ -1628,23 +1756,20 @@ export default function DocumentPage() {
           )}
 
           {/* ═══ NOTES TAB ═══ */}
-          {activeTab?.type === "notes" && (
-            <div className="flex flex-1 flex-col px-5 py-5">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="font-app text-[11px] font-medium uppercase tracking-wider text-ink-muted">
-                  Your Notes
-                </span>
-                <span className="font-app text-[11px] text-ink-muted/50">
-                  Auto-saved
-                </span>
-              </div>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Start typing your notes about this document..."
-                className="flex-1 resize-none rounded-2xl border border-black/6 bg-cream-dark/15 p-5 font-app text-[13px] leading-relaxed text-ink/85 outline-none transition-colors placeholder:text-ink-muted/40 focus:border-black/12 focus:bg-white"
+          {activeTab?.type === "notes" && activeTab.noteId && (
+            noteData[activeTab.noteId] ? (
+              <NoteEditor
+                noteId={activeTab.noteId}
+                initialTitle={noteData[activeTab.noteId].title}
+                initialContent={noteData[activeTab.noteId].content}
+                onSave={handleNoteSave}
+                onDelete={handleNoteDelete}
               />
-            </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-muted/30 border-t-ink-muted" />
+              </div>
+            )
           )}
 
           {/* ═══ LESSON PLAN TAB ═══ */}
