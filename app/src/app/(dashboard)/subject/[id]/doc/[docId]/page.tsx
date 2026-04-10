@@ -29,7 +29,7 @@ import {
   Copy,
   ChevronDown,
   Layers,
-  HelpCircle,
+  GraduationCap,
   Trash2,
   Pencil,
 } from "lucide-react";
@@ -143,7 +143,7 @@ const TAB_OPTIONS: {
     type: "quiz",
     label: "Quiz",
     desc: "Test yourself",
-    icon: HelpCircle,
+    icon: GraduationCap,
     color: "bg-[#E0E7FF]",
     iconColor: "text-[#4F46E5]",
     hoverBg: "hover:bg-[#E0E7FF]/50",
@@ -2126,7 +2126,7 @@ export default function DocumentPage() {
           {activeTab?.type === "quiz" && (
             <div className="flex flex-1 flex-col items-center justify-center py-12 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E0E7FF] mb-4">
-                <HelpCircle size={20} className="text-[#4F46E5]" />
+                <GraduationCap size={20} className="text-[#4F46E5]" />
               </div>
               <p className="font-app text-[15px] font-medium text-ink mb-1">Quiz</p>
               <p className="font-app text-[13px] text-ink-muted max-w-[260px]">
