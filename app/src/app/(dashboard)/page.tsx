@@ -74,6 +74,25 @@ export default function AppDashboard() {
         } else {
           console.log("Subjects loaded:", { userId: user.id, count: subjectsData?.length ?? 0 });
           setSubjects((subjectsData ?? []).map((s) => ({ ...s, document_count: 0 })));
+
+          // Fetch real document counts
+          if (subjectsData && subjectsData.length > 0) {
+            const ids = subjectsData.map((s) => s.id);
+            const { data: docs } = await supabase
+              .from("documents")
+              .select("subject_id")
+              .in("subject_id", ids);
+
+            if (docs) {
+              const counts: Record<string, number> = {};
+              for (const d of docs) {
+                counts[d.subject_id] = (counts[d.subject_id] || 0) + 1;
+              }
+              setSubjects((prev) =>
+                prev.map((s) => ({ ...s, document_count: counts[s.id] || 0 }))
+              );
+            }
+          }
         }
 
         // Fetch recent documents
@@ -244,7 +263,7 @@ export default function AppDashboard() {
                 {subject.name}
               </h3>
               <span className="mt-1 text-xs text-ink-muted">
-                {subject.document_count} items
+                {subject.document_count} {subject.document_count === 1 ? "item" : "items"}
               </span>
               <span className="mt-auto pt-3 text-[11px] text-ink-muted/60">
                 {timeAgo(subject.updated_at)}

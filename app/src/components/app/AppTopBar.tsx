@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Search, PanelLeft, FolderOpen, BookOpen } from "lucide-react";
 import { useTopBar } from "@/lib/TopBarContext";
 
@@ -11,6 +12,8 @@ interface AppTopBarProps {
 
 export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarProps) {
   const { breadcrumb } = useTopBar();
+  const pathname = usePathname();
+  const isDashboard = pathname === "/" || pathname === "";
   const [searching, setSearching] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -68,7 +71,8 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
         </button>
       )}
 
-      {/* Search bar / Breadcrumb */}
+      {/* Search bar / Breadcrumb — hidden on dashboard */}
+      {isDashboard ? <div className="flex-1" /> : (
       <div className="flex flex-1 justify-center">
         {breadcrumb && !searching ? (
           /* ── Breadcrumb mode ── */
@@ -133,6 +137,7 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
           </label>
         )}
       </div>
+      )}
     </header>
   );
 }
