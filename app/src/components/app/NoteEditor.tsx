@@ -80,11 +80,6 @@ export default function NoteEditor({
     if (editor) debouncedSave(val || "Untitled Note", editor.getHTML());
   };
 
-  const handleDelete = () => {
-    const confirmed = window.confirm("Delete this note?");
-    if (confirmed) onDelete(noteId);
-  };
-
   if (!editor) return null;
 
   return (
@@ -99,7 +94,7 @@ export default function NoteEditor({
           className="flex-1 bg-transparent font-app-heading text-[18px] font-semibold outline-none placeholder:text-ink-muted/40"
         />
         <button
-          onClick={handleDelete}
+          onClick={() => onDelete(noteId)}
           className="rounded-lg p-1.5 text-ink-muted/50 transition-colors hover:bg-red-50 hover:text-red-500"
           title="Delete note"
         >
@@ -220,10 +215,8 @@ function LinkButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
         <Link2 size={14} />
       </ToolbarButton>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/10" onClick={() => setOpen(false)} />
-          <div className="relative w-full max-w-sm rounded-2xl border border-black/8 bg-white p-5 shadow-xl">
-            <p className="mb-3 font-app text-[15px] font-medium text-ink">Insert Link</p>
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-60 rounded-xl border border-black/8 bg-white p-2.5 shadow-lg">
+          <div className="flex items-center gap-1.5">
             <input
               ref={inputRef}
               type="url"
@@ -234,22 +227,14 @@ function LinkButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
                 if (e.key === "Escape") setOpen(false);
               }}
               placeholder="https://example.com"
-              className="w-full rounded-xl border border-black/10 bg-cream-dark/10 px-4 py-2.5 font-app text-[14px] outline-none transition-colors focus:border-black/20 focus:bg-white"
+              className="flex-1 rounded-lg border border-black/10 px-2.5 py-1.5 font-app text-[12px] outline-none focus:border-black/20"
             />
-            <div className="mt-3 flex justify-end gap-2">
-              <button
-                onClick={() => setOpen(false)}
-                className="rounded-lg px-4 py-2 font-app text-[13px] font-medium text-ink-muted transition-colors hover:bg-black/[0.04]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmit}
-                className="rounded-lg bg-ink px-4 py-2 font-app text-[13px] font-medium text-white transition-colors hover:bg-ink/80"
-              >
-                Add Link
-              </button>
-            </div>
+            <button
+              onClick={handleSubmit}
+              className="rounded-lg bg-ink px-2.5 py-1.5 font-app text-[11px] font-medium text-white transition-colors hover:bg-ink/80"
+            >
+              Add
+            </button>
           </div>
         </div>
       )}

@@ -315,6 +315,12 @@ html {
   height: 0;
 }
 
+.prose-note a {
+  color: #2563EB;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .ProseMirror:focus {
   outline: none;
 }

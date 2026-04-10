@@ -230,7 +230,7 @@ export default function AppDashboard() {
             <NextLink
               key={subject.id}
               href={`/subject/${subject.id}`}
-              className="group relative flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 transition-all hover:shadow-md hover:border-black/8"
+              className="group relative flex flex-col rounded-2xl border border-black/5 bg-white px-4 py-5 shadow-xs transition-all hover:bg-[#F8F6F3] hover:shadow-lg hover:border-black/10"
             >
               <button
                 onClick={(e) => {
@@ -305,7 +305,7 @@ export default function AppDashboard() {
           <h2 className="text-[17px] font-app-heading">Recents</h2>
         </div>
 
-        <div className="mt-4 space-y-1">
+        <div className="mt-4 space-y-2">
           {recents.length === 0 && !loading && (
             <p className="py-4 text-center text-sm text-ink-muted">
               No recent documents yet
@@ -315,14 +315,14 @@ export default function AppDashboard() {
             <NextLink
               key={item.id}
               href={`/subject/${item.subject_id}/doc/${item.id}`}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-white"
+              className="flex items-center gap-3 rounded-xl border border-black/5 bg-white px-4 py-3 shadow-xs transition-all hover:shadow-md hover:border-black/8"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cream-dark/50 text-[10px] font-medium text-ink-muted">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cream-dark/50 text-[10px] font-semibold text-ink-muted">
                 {item.type.toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{item.title}</p>
-                <p className="text-xs text-ink-muted">{item.subject_name}</p>
+                <p className="truncate text-[14px] font-medium">{item.title}</p>
+                <p className="text-[12px] text-ink-muted">{item.subject_name}</p>
               </div>
             </NextLink>
           ))}

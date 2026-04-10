@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 const NoteEditor = dynamic(() => import("@/components/app/NoteEditor"), { ssr: false });
+import SelectionToolbar from "@/components/app/SelectionToolbar";
 import {
   MessageSquare,
   FileText,
@@ -487,10 +488,11 @@ export default function DocumentPage() {
     return () => document.removeEventListener("click", close);
   }, [resourceMenuId]);
 
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; type: TabType } | null>(null);
+
   const handleDeleteResource = async (resourceId: string, resourceType: TabType) => {
     setResourceMenuId(null);
-    const confirmed = window.confirm("Are you sure you want to delete this resource?");
-    if (!confirmed) return;
+    setDeleteConfirm(null);
 
     const table = resourceType === "chat" ? "chats" : resourceType === "notes" ? "notes" : "document_summaries";
     const { error } = await supabase
@@ -583,6 +585,7 @@ export default function DocumentPage() {
   }, [user, docId, summaryGenerating, resourceRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
   const [lessonSteps, setLessonSteps] = useState(MOCK_LESSON);
   const [noteData, setNoteData] = useState<Record<string, { title: string; content: string }>>({});
+  const [noteRevision, setNoteRevision] = useState(0);;
   const [homeQuery, setHomeQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [editingPage, setEditingPage] = useState(false);
@@ -599,6 +602,10 @@ export default function DocumentPage() {
   const [searchResultCount, setSearchResultCount] = useState<number | null>(null);
   const pdfScrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [selectionToolbar, setSelectionToolbar] = useState<{
+    text: string;
+    rect: { top: number; left: number; bottom: number; width: number };
+  } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const ZOOM_MIN = 0.5;
@@ -677,6 +684,54 @@ export default function DocumentPage() {
       setSearchResultCount(null);
     }
   }, [searchOpen]);
+
+  // PDF text selection detection
+  useEffect(() => {
+    const container = pdfScrollRef.current;
+    if (!container) return;
+
+    const handleMouseUp = () => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.toString().trim().length === 0) return;
+
+        const range = selection.getRangeAt(0);
+        if (!container.contains(range.commonAncestorContainer)) return;
+
+        const selectedText = selection.toString().trim();
+        if (selectedText.length < 2) return;
+
+        const rangeRect = range.getBoundingClientRect();
+        setSelectionToolbar({
+          text: selectedText,
+          rect: {
+            top: rangeRect.top,
+            left: rangeRect.left,
+            bottom: rangeRect.bottom,
+            width: rangeRect.width,
+          },
+        });
+      }, 10);
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      // Don't dismiss if clicking inside toolbar
+      const toolbar = document.querySelector("[data-selection-toolbar]");
+      if (toolbar && toolbar.contains(e.target as Node)) return;
+      setSelectionToolbar(null);
+    };
+
+    const handleScroll = () => setSelectionToolbar(null);
+
+    container.addEventListener("mouseup", handleMouseUp);
+    container.addEventListener("mousedown", handleMouseDown);
+    container.addEventListener("scroll", handleScroll);
+    return () => {
+      container.removeEventListener("mouseup", handleMouseUp);
+      container.removeEventListener("mousedown", handleMouseDown);
+      container.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
 
   // Measure the scroll container width — stable regardless of content size
   useLayoutEffect(() => {
@@ -888,6 +943,61 @@ export default function DocumentPage() {
     setTimeout(() => sendChatMessage(text, newTab.id), 0);
   };
 
+  // Selection toolbar: ask about highlighted text
+  const handleSelectionAsk = (text: string) => {
+    const newTab: Tab = { id: Date.now().toString(), type: "chat", label: "Chat" };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newTab.id);
+    setTimeout(() => sendChatMessage(`Explain this:\n\n"${text}"`, newTab.id), 0);
+  };
+
+  // Selection toolbar: add text to existing note
+  const handleSelectionAddToNote = async (noteId: string, text: string) => {
+    const { data } = await supabase
+      .from("notes")
+      .select("title, content")
+      .eq("id", noteId)
+      .single();
+
+    if (data) {
+      const separator = data.content ? "<hr><p></p>" : "";
+      const newContent = `${data.content || ""}${separator}<blockquote><p>${text}</p></blockquote><p></p>`;
+      await supabase
+        .from("notes")
+        .update({ content: newContent, updated_at: new Date().toISOString() })
+        .eq("id", noteId);
+
+      setNoteData((prev) => ({ ...prev, [noteId]: { title: data.title, content: newContent } }));
+      setNoteRevision((n) => n + 1);
+
+      // Open the note tab
+      openSavedNote(noteId, data.title);
+    }
+  };
+
+  // Selection toolbar: create new note with highlighted text
+  const handleSelectionNewNote = async (text: string) => {
+    if (!user) return;
+    const { data: noteRow } = await supabase
+      .from("notes")
+      .insert({ document_id: docId, user_id: user.id, title: "New Note", content: `<blockquote><p>${text}</p></blockquote><p></p>` })
+      .select("id")
+      .single();
+
+    if (noteRow) {
+      const newTab: Tab = { id: Date.now().toString(), type: "notes", label: "New Note", noteId: noteRow.id };
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(newTab.id);
+      setNoteData((prev) => ({ ...prev, [noteRow.id]: { title: "New Note", content: `<blockquote><p>${text}</p></blockquote><p></p>` } }));
+      setResourceRefresh((n) => n + 1);
+    }
+  };
+
+  // Get notes list for the selection toolbar picker
+  const notesForPicker = savedResources
+    .filter((r) => r.type === "notes")
+    .map((r) => ({ id: r.id, title: r.title }));
+
   // Load a saved chat thread into a tab
   const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
 
@@ -965,20 +1075,9 @@ export default function DocumentPage() {
   }, [supabase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Delete note
-  const handleNoteDelete = useCallback(async (noteId: string) => {
-    await supabase.from("notes").delete().eq("id", noteId);
-
-    // Close the tab
-    const tab = tabs.find((t) => t.noteId === noteId);
-    if (tab) {
-      setTabs((prev) => prev.filter((t) => t.id !== tab.id));
-      if (activeTabId === tab.id) setActiveTabId(null);
-    }
-
-    // Remove from resources
-    setSavedResources((prev) => prev.filter((r) => r.id !== noteId));
-    setResourceRefresh((n) => n + 1);
-  }, [supabase, tabs, activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleNoteDelete = useCallback((noteId: string) => {
+    setDeleteConfirm({ id: noteId, type: "notes" });
+  }, []);
 
   /* ── Load note data when note tab is active ── */
   useEffect(() => {
@@ -1297,8 +1396,25 @@ export default function DocumentPage() {
             </div>
           )}
           <div className="h-4" />
+
         </div>
       </div>
+
+      {/* Selection toolbar — fixed positioned */}
+      {selectionToolbar && (
+        <div data-selection-toolbar>
+          <SelectionToolbar
+            text={selectionToolbar.text}
+            rect={selectionToolbar.rect}
+            containerRef={pdfScrollRef}
+            notes={notesForPicker}
+            onAsk={handleSelectionAsk}
+            onAddToNote={handleSelectionAddToNote}
+            onCreateNoteWithText={handleSelectionNewNote}
+            onDismiss={() => setSelectionToolbar(null)}
+          />
+        </div>
+      )}
 
       {/* ════════ DRAGGABLE DIVIDER ════════ */}
       <div
@@ -1319,7 +1435,7 @@ export default function DocumentPage() {
       >
         {/* Tab bar — only show when tabs exist */}
         {tabs.length > 0 && (
-          <div className="relative z-10 flex shrink-0 items-center border-b border-black/[0.04] px-4 py-2.5 overflow-hidden">
+          <div className="relative z-20 flex shrink-0 items-center border-b border-black/[0.04] px-4 py-2.5">
             {/* Home button */}
             <button
               onClick={() => { setActiveTabId(null); setResourceRefresh((n) => n + 1); }}
@@ -1396,7 +1512,7 @@ export default function DocumentPage() {
                 <Plus size={15} />
               </button>
               {showAddMenu && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-2xl border border-black/8 bg-white p-2 shadow-xl">
+                <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-2xl border border-black/8 bg-white p-2 shadow-xl">
                   <div className="space-y-0.5">
                     {TAB_OPTIONS.map((opt) => (
                       <button
@@ -1541,7 +1657,7 @@ export default function DocumentPage() {
                                 </button>
                               )}
                               <button
-                                onClick={() => handleDeleteResource(set.id, set.type)}
+                                onClick={() => { setResourceMenuId(null); setDeleteConfirm({ id: set.id, type: set.type }); }}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 transition-colors hover:bg-red-50"
                               >
                                 <Trash2 size={13} />
@@ -1759,6 +1875,7 @@ export default function DocumentPage() {
           {activeTab?.type === "notes" && activeTab.noteId && (
             noteData[activeTab.noteId] ? (
               <NoteEditor
+                key={`${activeTab.noteId}-${noteRevision}`}
                 noteId={activeTab.noteId}
                 initialTitle={noteData[activeTab.noteId].title}
                 initialContent={noteData[activeTab.noteId].content}
@@ -1847,6 +1964,38 @@ export default function DocumentPage() {
           )}
         </div>
       </div>
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <button
+              onClick={() => setDeleteConfirm(null)}
+              className="absolute right-4 top-4 rounded-lg p-1 text-ink-muted transition-colors hover:bg-black/[0.04] hover:text-ink"
+            >
+              <X size={16} />
+            </button>
+            <h3 className="font-app-heading text-[17px]">Delete Resource</h3>
+            <p className="mt-2 font-app text-[14px] text-ink-muted">
+              Are you sure you want to delete this? This action cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="rounded-xl bg-black/[0.04] px-5 py-2.5 font-app text-[13px] font-medium text-ink transition-colors hover:bg-black/[0.08]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteResource(deleteConfirm.id, deleteConfirm.type)}
+                className="rounded-xl bg-red-500 px-5 py-2.5 font-app text-[13px] font-medium text-white transition-colors hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
