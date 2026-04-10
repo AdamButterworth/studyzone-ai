@@ -10,6 +10,7 @@ Status of each feature.
 | [Notes](notes.md) | P1 | 📋 Planned | Simple note persistence per document |
 | [Markdown Rendering](markdown-rendering.md) | P1 | 📋 TODO | LaTeX, code highlighting, copy AI replies to notes |
 | [Highlight Actions](highlight-actions.md) | P2 | 📋 TODO | Select PDF text → ask, save to notes, highlight |
+| [Resource Organisation](resource-organisation.md) | P1 | 📋 TODO | Folders, filters, cross-document resource view |
 | [UI Polish](ui-polish.md) | P2 | 📋 TODO | Ongoing refinements |
 
 ## Build order
