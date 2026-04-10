@@ -22,6 +22,7 @@ interface RecentDoc {
   type: string;
   subject_id: string;
   subject_name: string;
+  last_viewed_at: string;
 }
 
 function timeAgo(date: string): string {
@@ -95,10 +96,10 @@ export default function AppDashboard() {
           }
         }
 
-        // Fetch recent documents
+        // Fetch recent documents with subject name
         const { data: recentsData, error: recentsError } = await supabase
           .from("documents")
-          .select("id, title, type, subject_id")
+          .select("id, title, type, subject_id, last_viewed_at, subjects(name)")
           .eq("user_id", user.id)
           .not("last_viewed_at", "is", null)
           .order("last_viewed_at", { ascending: false })
@@ -113,7 +114,8 @@ export default function AppDashboard() {
               title: d.title,
               type: d.type,
               subject_id: d.subject_id,
-              subject_name: "",
+              subject_name: d.subjects?.name || "",
+              last_viewed_at: d.last_viewed_at,
             }))
           );
         }
@@ -320,10 +322,15 @@ export default function AppDashboard() {
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cream-dark/50 text-[10px] font-semibold text-ink-muted">
                 {item.type.toUpperCase()}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-[14px] font-medium">{item.title}</p>
-                <p className="text-[12px] text-ink-muted">{item.subject_name}</p>
+                {item.subject_name && (
+                  <p className="text-[12px] text-ink-muted">{item.subject_name}</p>
+                )}
               </div>
+              <span className="shrink-0 text-[12px] text-ink-muted/60">
+                {timeAgo(item.last_viewed_at)}
+              </span>
             </NextLink>
           ))}
         </div>
