@@ -3,15 +3,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import TiptapLink from "@tiptap/extension-link";
 import {
   Bold,
   Italic,
   List,
   ListOrdered,
-  Heading2,
   Undo,
   Redo,
   Trash2,
+  ChevronDown,
+  Link2,
 } from "lucide-react";
 
 interface NoteEditorProps {
@@ -56,7 +58,10 @@ export default function NoteEditor({
   const editor = useEditor(
     {
       immediatelyRender: false,
-      extensions: [StarterKit],
+      extensions: [
+        StarterKit,
+        TiptapLink.configure({ openOnClick: false, HTMLAttributes: { class: "text-sky underline cursor-pointer" } }),
+      ],
       content: initialContent,
       editorProps: {
         attributes: {
@@ -121,13 +126,8 @@ export default function NoteEditor({
 
         <div className="mx-1.5 h-4 w-px bg-black/[0.06]" />
 
-        <ToolbarButton
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          active={editor.isActive("heading", { level: 2 })}
-          title="Heading"
-        >
-          <Heading2 size={14} />
-        </ToolbarButton>
+        <HeadingDropdown editor={editor} />
+
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           active={editor.isActive("bold")}
@@ -142,6 +142,7 @@ export default function NoteEditor({
         >
           <Italic size={14} />
         </ToolbarButton>
+        <LinkButton editor={editor} />
 
         <div className="mx-1.5 h-4 w-px bg-black/[0.06]" />
 
@@ -165,6 +166,156 @@ export default function NoteEditor({
       <div className="flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
+    </div>
+  );
+}
+
+function LinkButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("https://");
+  const ref = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setUrl("https://");
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [open]);
+
+  if (!editor) return null;
+
+  const handleSubmit = () => {
+    if (!url || url === "https://") {
+      setOpen(false);
+      return;
+    }
+    const href = url.match(/^https?:\/\//) ? url : `https://${url}`;
+    editor.chain().focus().setLink({ href }).run();
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <ToolbarButton
+        onClick={() => {
+          if (editor.isActive("link")) {
+            editor.chain().focus().unsetLink().run();
+          } else {
+            setOpen(!open);
+          }
+        }}
+        active={editor.isActive("link")}
+        title="Link"
+      >
+        <Link2 size={14} />
+      </ToolbarButton>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/10" onClick={() => setOpen(false)} />
+          <div className="relative w-full max-w-sm rounded-2xl border border-black/8 bg-white p-5 shadow-xl">
+            <p className="mb-3 font-app text-[15px] font-medium text-ink">Insert Link</p>
+            <input
+              ref={inputRef}
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubmit();
+                if (e.key === "Escape") setOpen(false);
+              }}
+              placeholder="https://example.com"
+              className="w-full rounded-xl border border-black/10 bg-cream-dark/10 px-4 py-2.5 font-app text-[14px] outline-none transition-colors focus:border-black/20 focus:bg-white"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                onClick={() => setOpen(false)}
+                className="rounded-lg px-4 py-2 font-app text-[13px] font-medium text-ink-muted transition-colors hover:bg-black/[0.04]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                className="rounded-lg bg-ink px-4 py-2 font-app text-[13px] font-medium text-white transition-colors hover:bg-ink/80"
+              >
+                Add Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeadingDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  if (!editor) return null;
+
+  const current = editor.isActive("heading", { level: 1 })
+    ? "Heading 1"
+    : editor.isActive("heading", { level: 2 })
+      ? "Heading 2"
+      : editor.isActive("heading", { level: 3 })
+        ? "Heading 3"
+        : "Normal";
+
+  const options = [
+    { label: "Normal", action: () => editor.chain().focus().setParagraph().run() },
+    { label: "Heading 1", action: () => editor.chain().focus().toggleHeading({ level: 1 }).run() },
+    { label: "Heading 2", action: () => editor.chain().focus().toggleHeading({ level: 2 }).run() },
+    { label: "Heading 3", action: () => editor.chain().focus().toggleHeading({ level: 3 }).run() },
+  ];
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex h-7 items-center gap-1 rounded-md px-2 text-[12px] font-medium text-ink-muted transition-colors hover:bg-black/[0.04] hover:text-ink"
+      >
+        {current}
+        <ChevronDown size={11} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-30 mt-1 w-36 rounded-xl border border-black/8 bg-white py-1 shadow-lg">
+          {options.map((opt) => (
+            <button
+              key={opt.label}
+              onClick={() => { opt.action(); setOpen(false); }}
+              className={`flex w-full items-center px-3 py-1.5 text-left transition-colors hover:bg-black/[0.04] ${
+                current === opt.label ? "font-medium text-ink" : "text-ink-muted"
+              } ${
+                opt.label === "Heading 1" ? "text-[17px] font-semibold" :
+                opt.label === "Heading 2" ? "text-[15px] font-semibold" :
+                opt.label === "Heading 3" ? "text-[14px] font-semibold" :
+                "text-[13px]"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
