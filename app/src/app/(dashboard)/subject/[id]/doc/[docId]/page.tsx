@@ -24,7 +24,7 @@ import {
   ZoomIn,
   ZoomOut,
   Search,
-  Maximize2,
+  Expand,
   Minimize2,
   Trash2,
   Pencil,
@@ -269,6 +269,7 @@ export default function DocumentPage() {
   const [rightWidth, setRightWidth] = useState(480);
   const [dragging, setDragging] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRightFullscreen, setIsRightFullscreen] = useState(false);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const rightPanelRef = useRef<HTMLDivElement>(null);
@@ -1224,7 +1225,7 @@ export default function DocumentPage() {
       style={{ height: "calc(100vh - 3.5rem)", marginTop: "-1.5rem" }}
     >
       {/* ════════ LEFT: Document Viewer ════════ */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#EFECEA]">
+      <div className={`flex min-w-0 flex-col overflow-hidden bg-[#EFECEA] ${isRightFullscreen ? "hidden" : "flex-1"}`}>
         {/* PDF toolbar */}
         <div className="flex shrink-0 items-center gap-3 border-b border-black/6 bg-white px-5 py-2.5">
           <div className="flex items-center gap-1.5">
@@ -1320,11 +1321,11 @@ export default function DocumentPage() {
             <Download size={13} />
           </button>
           <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
+            onClick={() => { setIsFullscreen(!isFullscreen); if (isRightFullscreen) setIsRightFullscreen(false); }}
             className="rounded p-1.5 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink"
             title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           >
-            {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {isFullscreen ? <Minimize2 size={13} /> : <Expand size={13} />}
           </button>
         </div>
 
@@ -1422,7 +1423,7 @@ export default function DocumentPage() {
       {/* ════════ DRAGGABLE DIVIDER ════════ */}
       <div
         onMouseDown={startDrag}
-        className={`group relative z-10 w-0 shrink-0 cursor-col-resize ${isFullscreen ? "hidden" : ""}`}
+        className={`group relative z-10 w-0 shrink-0 cursor-col-resize ${isFullscreen || isRightFullscreen ? "hidden" : ""}`}
       >
         <div className="absolute inset-y-0 -left-[2px] w-[4px] rounded-full bg-black/[0.08] transition-colors group-hover:bg-black/[0.15] group-active:bg-black/20" />
         <div className="absolute inset-y-0 -left-3 w-7" />
@@ -1434,7 +1435,7 @@ export default function DocumentPage() {
       {/* ════════ RIGHT: AI Tools Panel ════════ */}
       <div
         ref={rightPanelRef}
-        className={`flex shrink-0 flex-col overflow-hidden bg-white ${dragging ? "" : "transition-[width] duration-300"} ${isFullscreen ? "w-0" : ""}`}
+        className={`flex flex-col overflow-hidden bg-white ${dragging ? "" : "transition-[width] duration-300"} ${isFullscreen ? "w-0 shrink-0" : isRightFullscreen ? "flex-1" : "shrink-0"}`}
       >
         {/* Tab bar — only show when tabs exist */}
         {tabs.length > 0 && (
@@ -1455,7 +1456,7 @@ export default function DocumentPage() {
             <div className="mx-1 h-4 w-px bg-black/6" />
 
             {/* Open tabs */}
-            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none" style={{ scrollbarWidth: "none" }}>
+            <div className={`flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none ${tabs.length === 0 ? "" : ""}`} style={{ scrollbarWidth: "none" }}>
               {tabs.map((tab) => {
                 const opt = TAB_OPTIONS.find((o) => o.type === tab.type);
                 const Icon = opt?.icon || MessageSquare;
@@ -1537,6 +1538,15 @@ export default function DocumentPage() {
                 </div>
               )}
             </div>
+
+            {/* Expand right panel */}
+            <button
+              onClick={() => { setIsRightFullscreen(!isRightFullscreen); if (isFullscreen) setIsFullscreen(false); }}
+              className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink"
+              title={isRightFullscreen ? "Exit fullscreen" : "Expand panel"}
+            >
+              {isRightFullscreen ? <Minimize2 size={14} /> : <Expand size={14} />}
+            </button>
           </div>
         )}
 
@@ -1547,9 +1557,18 @@ export default function DocumentPage() {
             <div className="flex flex-1 flex-col overflow-y-auto">
               <div className="flex-1 px-6 py-6">
                 {/* Generate section */}
-                <p className="mb-3 font-app text-[12px] font-medium uppercase tracking-wider text-ink-muted">
-                  Generate
-                </p>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="font-app text-[12px] font-medium uppercase tracking-wider text-ink-muted">
+                    Generate
+                  </p>
+                  <button
+                    onClick={() => { setIsRightFullscreen(!isRightFullscreen); if (isFullscreen) setIsFullscreen(false); }}
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-ink-muted/50 transition-colors hover:bg-black/[0.04] hover:text-ink"
+                    title={isRightFullscreen ? "Exit fullscreen" : "Expand panel"}
+                  >
+                    {isRightFullscreen ? <Minimize2 size={14} /> : <Expand size={14} />}
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-2.5">
                   {TAB_OPTIONS.map((opt) => (
                     <button
