@@ -26,6 +26,8 @@ import {
   Search,
   Expand,
   Minimize2,
+  Copy,
+  ChevronDown,
   Trash2,
   Pencil,
 } from "lucide-react";
@@ -295,8 +297,8 @@ export default function DocumentPage() {
 
   useLayoutEffect(() => {
     if (!rightPanelRef.current) return;
-    rightPanelRef.current.style.width = isFullscreen ? "0px" : `${rightWidth}px`;
-  }, [isFullscreen, rightWidth]);
+    rightPanelRef.current.style.width = isFullscreen ? "0px" : isRightFullscreen ? "100%" : `${rightWidth}px`;
+  }, [isFullscreen, isRightFullscreen, rightWidth]);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -610,6 +612,20 @@ export default function DocumentPage() {
     text: string;
     rect: { top: number; left: number; bottom: number; width: number };
   } | null>(null);
+  const [chatSelection, setChatSelection] = useState<{
+    text: string;
+    rect: { top: number; left: number; bottom: number; width: number };
+  } | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea when chatInput changes programmatically (e.g. Reply)
+  useEffect(() => {
+    const t = chatTextareaRef.current;
+    if (!t) return;
+    t.style.height = "auto";
+    t.style.height = Math.min(t.scrollHeight, 200) + "px";
+  }, [chatInput]);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const ZOOM_MIN = 0.5;
@@ -736,6 +752,40 @@ export default function DocumentPage() {
       container.removeEventListener("scroll", handleScroll);
     };
   }, []);
+
+  // Chat text selection detection
+  useEffect(() => {
+    const container = chatScrollRef.current;
+    if (!container) return;
+
+    const handleMouseUp = () => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.toString().trim().length < 2) return;
+        const range = selection.getRangeAt(0);
+        if (!container.contains(range.commonAncestorContainer)) return;
+
+        const rangeRect = range.getBoundingClientRect();
+        setChatSelection({
+          text: selection.toString().trim(),
+          rect: { top: rangeRect.top, left: rangeRect.left, bottom: rangeRect.bottom, width: rangeRect.width },
+        });
+      }, 10);
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      const toolbar = document.querySelector("[data-chat-selection-toolbar]");
+      if (toolbar && toolbar.contains(e.target as Node)) return;
+      setChatSelection(null);
+    };
+
+    container.addEventListener("mouseup", handleMouseUp);
+    container.addEventListener("mousedown", handleMouseDown);
+    return () => {
+      container.removeEventListener("mouseup", handleMouseUp);
+      container.removeEventListener("mousedown", handleMouseDown);
+    };
+  }, [activeTab?.type]);
 
   // Measure the scroll container width — stable regardless of content size
   useLayoutEffect(() => {
@@ -1227,8 +1277,8 @@ export default function DocumentPage() {
       {/* ════════ LEFT: Document Viewer ════════ */}
       <div className={`flex min-w-0 flex-col overflow-hidden bg-[#EFECEA] ${isRightFullscreen ? "hidden" : "flex-1"}`}>
         {/* PDF toolbar */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-black/6 bg-white px-5 py-2.5">
-          <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto border-b border-black/6 bg-white px-5 py-2.5" style={{ scrollbarWidth: "none" }}>
+          <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
             <button
               onClick={() => goToPage(Math.max(1, currentPage - 1))}
               disabled={currentPage <= 1}
@@ -1723,7 +1773,7 @@ export default function DocumentPage() {
           {/* ═══ CHAT TAB ═══ */}
           {activeTab?.type === "chat" && (
             <>
-              <div className="flex-1 overflow-y-auto px-5 py-5">
+              <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-5 py-5">
                 {loadingChatId === activeChatTabId && (
                   <div className="flex items-center justify-center py-10">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-ink-muted/30 border-t-ink-muted" />
@@ -1761,29 +1811,40 @@ export default function DocumentPage() {
                   {messages.map((msg) => (
                     <div
                       key={msg.id}
-                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                      className={`group/msg flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      <div
-                        className={`max-w-[85%] px-4 py-3 font-app text-[14px] leading-[1.7] ${
-                          msg.role === "user"
-                            ? "rounded-[20px] rounded-br-lg bg-ink text-white"
-                            : "rounded-[20px] rounded-bl-lg bg-white text-ink shadow-sm ring-1 ring-black/[0.04]"
-                        }`}
-                      >
-                        {msg.role === "ai" && msg.text === "" ? (
-                          <div className="flex items-center gap-1 py-1">
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "0ms" }} />
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "150ms" }} />
-                            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "300ms" }} />
-                          </div>
-                        ) : msg.role === "ai" ? (
-                          <div className="prose-chat">
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
-                              {msg.text}
-                            </ReactMarkdown>
-                          </div>
-                        ) : (
-                          <p className="whitespace-pre-wrap">{msg.text}</p>
+                      <div className={`relative ${msg.role === "user" ? "max-w-[85%]" : "w-full"}`}>
+                        <div
+                          className={`px-4 py-3 font-app text-[14px] leading-[1.7] ${
+                            msg.role === "user"
+                              ? "rounded-[20px] rounded-br-lg bg-ink text-white"
+                              : "text-ink"
+                          }`}
+                        >
+                          {msg.role === "ai" && msg.text === "" ? (
+                            <div className="flex items-center gap-1 py-1">
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "0ms" }} />
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "150ms" }} />
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-muted/40" style={{ animationDelay: "300ms" }} />
+                            </div>
+                          ) : msg.role === "ai" ? (
+                            <div className="prose-chat">
+                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                {msg.text}
+                              </ReactMarkdown>
+                            </div>
+                          ) : (
+                            <p className="whitespace-pre-wrap">{msg.text}</p>
+                          )}
+                        </div>
+                        {/* Hover actions for AI messages */}
+                        {msg.role === "ai" && msg.text && (
+                          <ChatMsgActions
+                            text={msg.text}
+                            notes={notesForPicker}
+                            onAddToNote={handleSelectionAddToNote}
+                            onNewNote={handleSelectionNewNote}
+                          />
                         )}
                       </div>
                     </div>
@@ -1791,10 +1852,49 @@ export default function DocumentPage() {
                   <div ref={chatEndRef} />
                 </div>
               </div>
+
+              {/* Chat selection toolbar */}
+              {chatSelection && (
+                <div data-chat-selection-toolbar className="fixed z-50" style={{ top: chatSelection.rect.bottom + 6, left: Math.max(8, chatSelection.rect.left + chatSelection.rect.width / 2 - 120) }}>
+                  <div className="flex items-center gap-0.5 rounded-xl border border-black/10 bg-white px-1.5 py-1 shadow-xl">
+                    <button
+                      onClick={() => {
+                        setChatInput((prev) => `${prev}${prev ? "\n" : ""}> "${chatSelection.text}"\n\n`);
+                        setChatSelection(null);
+                        chatTextareaRef.current?.focus();
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-app text-[12px] font-medium text-ink/80 transition-colors hover:bg-black/[0.04] hover:text-ink"
+                    >
+                      <RotateCcw size={13} />
+                      Reply
+                    </button>
+                    <div className="h-4 w-px bg-black/[0.08]" />
+                    <ChatSelectionNotePicker
+                      text={chatSelection.text}
+                      notes={notesForPicker}
+                      onAddToNote={(noteId) => { handleSelectionAddToNote(noteId, chatSelection.text); setChatSelection(null); }}
+                      onNewNote={() => { handleSelectionNewNote(chatSelection.text); setChatSelection(null); }}
+                    />
+                    <div className="h-4 w-px bg-black/[0.08]" />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(chatSelection.text);
+                        setChatSelection(null);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-app text-[12px] font-medium text-ink/80 transition-colors hover:bg-black/[0.04] hover:text-ink"
+                    >
+                      <Copy size={13} />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Chat input */}
               <div className="shrink-0 px-4 pb-4 pt-2">
-                <div className="flex items-end gap-2 rounded-[24px] border border-black/8 bg-white px-4 py-2.5 shadow-sm transition-all focus-within:border-black/14 focus-within:shadow-md">
+                <div className="rounded-[24px] border border-black/8 bg-white shadow-sm transition-all focus-within:border-black/14 focus-within:shadow-md">
                   <textarea
+                    ref={chatTextareaRef}
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -1806,18 +1906,19 @@ export default function DocumentPage() {
                     placeholder="Ask anything..."
                     disabled={chatLoading}
                     rows={1}
-                    className="min-h-[36px] flex-1 resize-none bg-transparent py-1.5 font-app text-[14px] leading-relaxed outline-none placeholder:text-ink-muted disabled:opacity-60"
-                    style={{ maxHeight: 120 }}
+                    className="min-h-[36px] w-full resize-none bg-transparent px-5 pt-3 pb-1 font-app text-[14px] leading-relaxed outline-none placeholder:text-ink-muted disabled:opacity-60"
+                    style={{ maxHeight: 200 }}
                     onInput={(e) => {
                       const t = e.currentTarget;
                       t.style.height = "auto";
                       t.style.height = Math.min(t.scrollHeight, 120) + "px";
                     }}
                   />
+                  <div className="flex justify-end px-3 pb-2.5">
                   <button
                     onClick={handleSendMessage}
                     disabled={chatLoading}
-                    className={`mb-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
                       chatInput.trim() && !chatLoading
                         ? "bg-ink text-white hover:bg-ink/80"
                         : "bg-cream-dark/60 text-ink-muted/40"
@@ -1825,6 +1926,7 @@ export default function DocumentPage() {
                   >
                     <ArrowRight size={14} />
                   </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -2016,6 +2118,159 @@ export default function DocumentPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChatMsgActions({ text, notes, onAddToNote, onNewNote }: {
+  text: string;
+  notes: { id: string; title: string }[];
+  onAddToNote: (noteId: string, text: string) => void;
+  onNewNote: (text: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [added, setAdded] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const close = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [pickerOpen]);
+
+  const handleAdd = (noteId: string) => {
+    onAddToNote(noteId, text);
+    setPickerOpen(false);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1500);
+  };
+
+  const recentNote = notes[0];
+
+  return (
+    <div className="mt-1 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/msg:opacity-100">
+      {/* Add to note with picker */}
+      <div className="relative" ref={pickerRef}>
+        <div className="flex items-center">
+          <button
+            onClick={() => {
+              if (recentNote) { handleAdd(recentNote.id); }
+              else { onNewNote(text); setAdded(true); setTimeout(() => setAdded(false), 1500); }
+            }}
+            className="flex items-center gap-1 rounded-l-md px-1.5 py-1 text-[11px] text-ink-muted transition-colors hover:bg-black/[0.04] hover:text-ink"
+          >
+            {added ? <Check size={12} className="text-emerald-500" /> : <StickyNote size={12} />}
+            <span>{added ? "Added" : recentNote ? `Add to "${recentNote.title.slice(0, 12)}${recentNote.title.length > 12 ? "…" : ""}"` : "New Note"}</span>
+          </button>
+          {notes.length > 0 && (
+            <button
+              onClick={() => setPickerOpen(!pickerOpen)}
+              className="rounded-r-md px-0.5 py-1 text-ink-muted transition-colors hover:bg-black/[0.04] hover:text-ink"
+            >
+              <ChevronDown size={10} />
+            </button>
+          )}
+        </div>
+        {pickerOpen && (
+          <div className="absolute bottom-full left-0 z-50 mb-1 w-48 rounded-xl border border-black/8 bg-white py-1 shadow-lg">
+            {notes.map((n) => (
+              <button
+                key={n.id}
+                onClick={() => handleAdd(n.id)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/80 transition-colors hover:bg-black/[0.04]"
+              >
+                <StickyNote size={11} className="shrink-0 text-ink-muted" />
+                <span className="truncate">{n.title}</span>
+              </button>
+            ))}
+            <div className="mx-2 my-0.5 h-px bg-black/[0.06]" />
+            <button
+              onClick={() => { onNewNote(text); setPickerOpen(false); setAdded(true); setTimeout(() => setAdded(false), 1500); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/80 transition-colors hover:bg-black/[0.04]"
+            >
+              <Plus size={11} className="shrink-0 text-ink-muted" />
+              New Note
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Copy */}
+      <button
+        onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+        className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-ink-muted transition-colors hover:bg-black/[0.04] hover:text-ink"
+      >
+        {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+        <span>{copied ? "Copied" : "Copy"}</span>
+      </button>
+    </div>
+  );
+}
+
+function ChatSelectionNotePicker({ text, notes, onAddToNote, onNewNote }: {
+  text: string;
+  notes: { id: string; title: string }[];
+  onAddToNote: (noteId: string) => void;
+  onNewNote: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const recent = notes[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <div className="flex items-center">
+        <button
+          onClick={() => recent ? onAddToNote(recent.id) : onNewNote()}
+          className="flex items-center gap-1.5 rounded-l-lg px-2.5 py-1.5 font-app text-[12px] font-medium text-ink/80 transition-colors hover:bg-black/[0.04] hover:text-ink"
+        >
+          <StickyNote size={13} />
+          {recent ? `Add to "${recent.title.slice(0, 10)}${recent.title.length > 10 ? "…" : ""}"` : "New Note"}
+        </button>
+        {notes.length > 0 && (
+          <button
+            onClick={() => setOpen(!open)}
+            className="rounded-r-lg px-1 py-1.5 text-ink-muted transition-colors hover:bg-black/[0.04] hover:text-ink"
+          >
+            <ChevronDown size={10} />
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="absolute bottom-full left-0 z-50 mb-1 w-48 rounded-xl border border-black/8 bg-white py-1 shadow-lg">
+          {notes.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => { onAddToNote(n.id); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/80 transition-colors hover:bg-black/[0.04]"
+            >
+              <StickyNote size={11} className="shrink-0 text-ink-muted" />
+              <span className="truncate">{n.title}</span>
+            </button>
+          ))}
+          <div className="mx-2 my-0.5 h-px bg-black/[0.06]" />
+          <button
+            onClick={() => { onNewNote(); setOpen(false); }}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-ink/80 transition-colors hover:bg-black/[0.04]"
+          >
+            <Plus size={11} className="shrink-0 text-ink-muted" />
+            New Note
+          </button>
         </div>
       )}
     </div>
