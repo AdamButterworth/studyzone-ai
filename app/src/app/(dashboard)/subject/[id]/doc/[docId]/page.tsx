@@ -98,32 +98,32 @@ const TAB_OPTIONS: {
     label: "Chat",
     desc: "Ask questions",
     icon: MessageSquare,
-    color: "bg-cream-dark/50",
-    iconColor: "text-ink/60",
+    color: "bg-cream-dark/80",
+    iconColor: "text-ink/70",
   },
   {
     type: "summary",
     label: "Summary",
     desc: "Key concepts",
     icon: FileText,
-    color: "bg-sky-light/60",
-    iconColor: "text-sky/70",
+    color: "bg-sky-light/80",
+    iconColor: "text-sky",
   },
   {
     type: "notes",
     label: "Notes",
     desc: "Your notes",
     icon: StickyNote,
-    color: "bg-mint-light/60",
-    iconColor: "text-mint/70",
+    color: "bg-mint-light/80",
+    iconColor: "text-mint",
   },
   {
     type: "lesson",
     label: "Lesson Plan",
     desc: "Guided learning",
     icon: ListChecks,
-    color: "bg-peach-light/60",
-    iconColor: "text-peach/70",
+    color: "bg-peach-light/80",
+    iconColor: "text-peach",
   },
 ];
 
@@ -776,22 +776,22 @@ export default function DocumentPage() {
     <div
       ref={containerRef}
       className="-mx-5 -my-6 flex md:-mx-8"
-      style={{ height: "calc(100vh - 3.5rem)" }}
+      style={{ height: "calc(100vh - 3.5rem)", marginTop: "-1.5rem" }}
     >
       {/* ════════ LEFT: Document Viewer ════════ */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#EEEAE5]">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#EFECEA]">
         {/* PDF toolbar */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-black/5 bg-white/60 px-5 py-2 backdrop-blur-sm">
+        <div className="flex shrink-0 items-center gap-3 border-b border-black/6 bg-white px-5 py-2.5">
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => goToPage(Math.max(1, currentPage - 1))}
               disabled={currentPage <= 1}
               className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
             >
-              <ChevronLeft size={13} />
+              <ChevronLeft size={14} />
             </button>
             {editingPage ? (
-              <span className="flex items-center gap-0.5 font-app text-[12px] tabular-nums text-ink-light">
+              <span className="flex items-center gap-0.5 font-app text-[13px] tabular-nums text-ink-light">
                 <input
                   autoFocus
                   type="text"
@@ -811,7 +811,7 @@ export default function DocumentPage() {
                     }
                     if (e.key === "Escape") setEditingPage(false);
                   }}
-                  className="w-8 rounded border border-black/10 bg-white px-1 py-0.5 text-center text-[12px] outline-none focus:border-black/20"
+                  className="w-9 rounded border border-black/10 bg-white px-1 py-0.5 text-center text-[13px] outline-none focus:border-black/20"
                 />
                 <span>/ {totalPages}</span>
               </span>
@@ -821,7 +821,7 @@ export default function DocumentPage() {
                   setPageInputValue(String(currentPage));
                   setEditingPage(true);
                 }}
-                className="font-app text-[12px] tabular-nums text-ink-light hover:text-ink transition-colors"
+                className="font-app text-[13px] tabular-nums text-ink-light hover:text-ink transition-colors"
               >
                 {totalPages > 0 ? `${currentPage} / ${totalPages}` : "—"}
               </button>
@@ -831,7 +831,7 @@ export default function DocumentPage() {
               disabled={currentPage >= totalPages}
               className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
             >
-              <ChevronRight size={13} />
+              <ChevronRight size={14} />
             </button>
           </div>
           <div className="mx-1 h-4 w-px bg-black/8" />
@@ -845,7 +845,7 @@ export default function DocumentPage() {
             </button>
             <button
               onClick={() => setZoom(1)}
-              className="font-app text-[12px] tabular-nums text-ink-light w-10 text-center hover:text-ink transition-colors"
+              className="font-app text-[13px] tabular-nums text-ink-light w-10 text-center hover:text-ink transition-colors"
               title="Reset to 100%"
             >
               {Math.round(zoom * 100)}%
@@ -885,7 +885,7 @@ export default function DocumentPage() {
 
         {/* Search bar */}
         {searchOpen && (
-          <div className="flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/80 px-5 py-2 backdrop-blur-sm">
+          <div className="flex shrink-0 items-center gap-2 border-b border-black/6 bg-white px-5 py-2.5">
             <Search size={13} className="shrink-0 text-ink-muted" />
             <input
               ref={searchInputRef}
@@ -948,8 +948,8 @@ export default function DocumentPage() {
         onMouseDown={startDrag}
         className={`group relative z-10 w-0 shrink-0 cursor-col-resize ${isFullscreen ? "hidden" : ""}`}
       >
-        <div className="absolute inset-y-0 -left-[1.5px] w-[3px] bg-black/[0.06] transition-colors group-hover:bg-black/[0.14] group-active:bg-black/20" />
-        <div className="absolute inset-y-0 -left-2 w-5" />
+        <div className="absolute inset-y-0 -left-[2px] w-[4px] rounded-full bg-black/[0.08] transition-colors group-hover:bg-black/[0.15] group-active:bg-black/20" />
+        <div className="absolute inset-y-0 -left-3 w-7" />
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100">
           <GripVertical size={12} className="text-ink-muted/50" />
         </div>
@@ -962,7 +962,7 @@ export default function DocumentPage() {
       >
         {/* Tab bar — only show when tabs exist */}
         {tabs.length > 0 && (
-          <div className="relative z-10 flex shrink-0 items-center px-3 py-2">
+          <div className="relative z-10 flex shrink-0 items-center border-b border-black/[0.04] px-4 py-2.5">
             {/* Home button */}
             <button
               onClick={() => setActiveTabId(null)}
@@ -1045,17 +1045,17 @@ export default function DocumentPage() {
           {/* ═══ HOME VIEW ═══ */}
           {isHome && (
             <div className="flex flex-1 flex-col overflow-y-auto">
-              <div className="flex-1 px-5 py-5">
+              <div className="flex-1 px-6 py-6">
                 {/* Generate section */}
-                <p className="mb-3 font-app text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                <p className="mb-3 font-app text-[12px] font-medium uppercase tracking-wider text-ink-muted">
                   Generate
                 </p>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   {TAB_OPTIONS.map((opt) => (
                     <button
                       key={opt.type}
                       onClick={() => addTab(opt.type)}
-                      className="flex items-center gap-3 rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-left transition-all hover:border-black/10 hover:shadow-sm"
+                      className="flex items-center gap-3 rounded-2xl border border-black/8 bg-white px-4 py-4 text-left shadow-sm transition-all hover:border-black/12 hover:shadow-md"
                     >
                       <div
                         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${opt.color}`}
@@ -1063,10 +1063,10 @@ export default function DocumentPage() {
                         <opt.icon size={18} className={opt.iconColor} />
                       </div>
                       <div>
-                        <p className="font-app text-[13px] font-medium">
+                        <p className="font-app text-[14px] font-medium">
                           {opt.label}
                         </p>
-                        <p className="font-app text-[11px] text-ink-muted">
+                        <p className="font-app text-[12px] text-ink-muted">
                           {opt.desc}
                         </p>
                       </div>
@@ -1076,7 +1076,7 @@ export default function DocumentPage() {
 
                 {/* My Resources */}
                 <div className="mt-7">
-                  <p className="mb-3 font-app text-[11px] font-medium uppercase tracking-wider text-ink-muted">
+                  <p className="mb-3 font-app text-[12px] font-medium uppercase tracking-wider text-ink-muted">
                     My Resources
                   </p>
                   {savedResources.length === 0 && (
@@ -1144,25 +1144,25 @@ export default function DocumentPage() {
               </div>
 
               {/* Ask anything — organic pill input */}
-              <div className="shrink-0 px-4 pb-4">
-                <label className="flex cursor-text items-center rounded-full border border-black/8 bg-cream-dark/20 pr-3 transition-all focus-within:border-black/14 focus-within:bg-white focus-within:shadow-sm">
+              <div className="shrink-0 px-5 pb-5">
+                <label className="flex cursor-text items-center rounded-full border border-black/10 bg-white pr-4 shadow-sm transition-all focus-within:border-black/16 focus-within:shadow-md">
                   <input
                     type="text"
                     value={homeQuery}
                     onChange={(e) => setHomeQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleHomeAsk()}
                     placeholder="Ask anything..."
-                    className="w-full rounded-full bg-transparent px-5 py-3.5 font-app text-[13px] outline-none placeholder:text-ink-muted/50"
+                    className="w-full rounded-full bg-transparent px-6 py-4 font-app text-[15px] outline-none placeholder:text-ink-muted/50"
                   />
                   <button
                     onClick={handleHomeAsk}
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
                       homeQuery.trim()
                         ? "bg-ink text-white hover:bg-ink/80"
                         : "text-ink-muted/40"
                     }`}
                   >
-                    <ArrowRight size={13} />
+                    <ArrowRight size={15} />
                   </button>
                 </label>
               </div>
@@ -1172,18 +1172,18 @@ export default function DocumentPage() {
           {/* ═══ CHAT TAB ═══ */}
           {activeTab?.type === "chat" && (
             <>
-              <div className="flex-1 overflow-y-auto px-4 py-4">
-                <div className="space-y-4">
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                <div className="space-y-5">
                   {messages.map((msg) => (
                     <div
                       key={msg.id}
                       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[85%] px-4 py-2.5 font-app text-[13px] leading-relaxed ${
+                        className={`max-w-[85%] px-4 py-3 font-app text-[14px] leading-[1.7] ${
                           msg.role === "user"
                             ? "rounded-[20px] rounded-br-lg bg-ink text-white"
-                            : "rounded-[20px] rounded-bl-lg bg-cream-dark/40 text-ink"
+                            : "rounded-[20px] rounded-bl-lg bg-white text-ink shadow-sm ring-1 ring-black/[0.04]"
                         }`}
                       >
                         {msg.role === "ai" && msg.text === "" ? (
@@ -1213,7 +1213,7 @@ export default function DocumentPage() {
                     }
                     placeholder="Ask about this document..."
                     disabled={chatLoading}
-                    className="w-full bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/50 disabled:opacity-60"
+                    className="w-full bg-transparent font-app text-[14px] outline-none placeholder:text-ink-muted/50 disabled:opacity-60"
                   />
                   <button
                     onClick={handleSendMessage}
@@ -1265,7 +1265,7 @@ export default function DocumentPage() {
 
                 {/* Streaming / rendered markdown */}
                 {summaryContent !== null && summaryContent !== "" && (
-                  <div className="prose-summary font-app text-[13px] leading-[1.8] text-ink/85">
+                  <div className="prose-summary font-app text-[14px] leading-[1.8] text-ink/90">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {summaryContent}
                     </ReactMarkdown>

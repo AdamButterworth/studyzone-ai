@@ -47,7 +47,7 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
   }, [breadcrumb]);
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 px-4">
+    <header className="flex h-14 shrink-0 items-center gap-3 bg-[#FAF7F4] px-4">
       {/* Sidebar toggle */}
       {!sidebarOpen && (
         <button
@@ -74,7 +74,7 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
           /* ── Breadcrumb mode ── */
           <div
             onClick={handleBarClick}
-            className="flex w-full max-w-xl cursor-text items-center rounded-xl border border-black/5 bg-white/60 px-4 py-2 transition-colors hover:border-black/10 hover:bg-white"
+            className="flex w-full max-w-xl cursor-text items-center rounded-xl border border-transparent bg-transparent px-4 py-2 transition-all hover:border-black/8 hover:bg-white"
           >
             <Search size={15} className="shrink-0 text-ink-muted/40" />
             <div className="ml-3 flex min-w-0 flex-1 items-center gap-1.5 font-app text-[14px]">
@@ -119,7 +119,7 @@ export default function AppTopBar({ sidebarOpen, onToggleSidebar }: AppTopBarPro
           </div>
         ) : (
           /* ── Search mode ── */
-          <label className="flex w-full max-w-xl cursor-text items-center gap-2 rounded-xl border border-black/5 bg-white/60 px-4 py-2 transition-colors focus-within:border-black/10 focus-within:bg-white">
+          <label className="flex w-full max-w-xl cursor-text items-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 transition-all hover:border-black/8 hover:bg-white focus-within:border-black/10 focus-within:bg-white">
             <Search size={15} className="shrink-0 text-ink-muted" />
             <input
               ref={searchInputRef}

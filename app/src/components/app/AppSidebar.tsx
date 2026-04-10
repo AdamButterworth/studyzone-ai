@@ -158,7 +158,7 @@ export default function AppSidebar({ open, onToggle }: AppSidebarProps) {
   };
 
   return (
-    <aside className="font-app-sidebar relative flex h-full w-[280px] flex-col border-r border-black/5 bg-white">
+    <aside className="font-app-sidebar relative flex h-full w-[280px] flex-col bg-[#FAF7F4]">
       <div className="flex w-[280px] flex-col h-full">
         {/* Header */}
         <div className="flex h-14 items-center justify-between px-4">

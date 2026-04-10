@@ -45,13 +45,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main area */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className={`flex flex-1 flex-col overflow-hidden transition-[margin] duration-300 ${sidebarOpen ? "" : "ml-2"}`}>
         <AppTopBar
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         />
-        <main className="flex-1 overflow-y-auto px-5 py-6 md:px-8">
-          {children}
+        <main className="flex-1 overflow-y-auto rounded-tl-2xl bg-white shadow-[inset_1px_1px_0_0_rgba(0,0,0,0.04)]">
+          <div className="px-5 py-6 md:px-8">
+            {children}
+          </div>
         </main>
       </div>
     </div>
