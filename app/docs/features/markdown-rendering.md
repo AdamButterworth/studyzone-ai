@@ -1,37 +1,38 @@
 # Markdown & LaTeX Rendering TODO
 
-## Problem
-Chat responses and summaries contain markdown formatting (bold, lists, code blocks, headers) and sometimes LaTeX equations, but:
-- **Chat** renders as plain text (`whitespace-pre-wrap`) — no markdown parsing
-- **Summary** uses `react-markdown` + `remark-gfm` — works for markdown but not LaTeX
+## Status
+- Chat markdown: ✅ Done (react-markdown + prose-chat styles)
+- Summary markdown: ✅ Done (react-markdown + prose-summary styles)
+- LaTeX: ❌ Not done
+- Code highlighting: ❌ Not done
 
-## What's needed
-
-### V1 — Markdown in Chat
-- Apply `react-markdown` + `remark-gfm` to chat AI messages (same as summary)
-- Reuse `.prose-summary` styles or create `.prose-chat` variant
-- Only apply to AI messages (user messages stay as plain text bubbles)
-- Handle inline code, code blocks, bold, italic, lists, tables
-
-### V2 — LaTeX / Math
-- Add `remark-math` + `rehype-katex` (or `rehype-mathjax`) plugins
+## Next: LaTeX / Math (P1 for tomorrow)
+- Add `remark-math` + `rehype-katex` plugins
 - Renders `$inline$` and `$$block$$` LaTeX equations
+- Apply to: chat messages, summary, AND notes editor
 - Needed for STEM documents (physics, math, CS theory papers)
-- Affects both chat and summary rendering
+- Example currently broken in summary: `$r^{int}_t$` shows as literal text
 
-### V3 — Code blocks with syntax highlighting
+### Files to modify
+- `src/app/(dashboard)/subject/[id]/doc/[docId]/page.tsx` — chat + summary rendering
+- `src/components/app/NoteEditor.tsx` — Tiptap math extension
+- `src/app/globals.css` — KaTeX styles
+- `package.json` — add `remark-math`, `rehype-katex`, `katex`
+
+## Next: Code blocks with syntax highlighting
 - Add `rehype-highlight` or `react-syntax-highlighter`
 - Language-aware syntax coloring
 - Copy button on code blocks
 
-## Example of current broken rendering
-```
-Based on the document, **τ-bench** is an evaluation framework...
-*   **Simulated Environment:** It uses a backend...
-```
-Shows literal `**` and `*` instead of bold and bullets.
+## Next: Copy AI replies to notes / reply to specific part
 
-## Files to modify
-- `src/app/(dashboard)/subject/[id]/doc/[docId]/page.tsx` — chat message rendering
-- `src/app/globals.css` — add `.prose-chat` styles
-- `package.json` — add `remark-math`, `rehype-katex` (for v2)
+### Copy to notes
+- Each AI chat message gets a "Copy to note" button (on hover)
+- Clicking it appends the message content to a note (same flow as PDF selection → add to note)
+- Uses the same note picker (most recent + dropdown)
+
+### Reply to specific part
+- Select text within an AI response
+- Show a mini toolbar: "Ask follow-up" / "Copy to note" / "Copy"
+- "Ask follow-up" pre-fills the chat input with the selected text as a quote
+- Similar to the PDF selection toolbar but for chat messages
