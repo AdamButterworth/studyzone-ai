@@ -85,6 +85,8 @@ export default function SubjectPage() {
   } | null>(null);
   const [learningQuery, setLearningQuery] = useState("");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -131,9 +133,9 @@ export default function SubjectPage() {
     docs.map((d) => ({
       id: d.id,
       name: d.title,
-      type: d.type.toUpperCase(),
+      type: d.type === "youtube" ? "Video" : d.type.toUpperCase(),
       status: d.status || "ready",
-      preview: d.raw_text?.slice(0, 120) || "",
+      preview: d.type === "youtube" ? (d.original_filename || "YouTube Video") : (d.raw_text?.slice(0, 120) || ""),
       added: timeAgo(d.created_at),
       lastViewed: d.last_viewed_at ? timeAgo(d.last_viewed_at) : "—",
       createdAt: d.created_at,
@@ -162,7 +164,7 @@ export default function SubjectPage() {
           .single(),
         supabase
           .from("documents")
-          .select("id, title, type, status, raw_text, created_at, last_viewed_at")
+          .select("id, title, type, status, raw_text, source_url, original_filename, created_at, last_viewed_at")
           .eq("subject_id", id)
           .order("created_at", { ascending: false })
           .range(0, PAGE_SIZE - 1),
@@ -194,7 +196,7 @@ export default function SubjectPage() {
     setLoadingMore(true);
     const { data } = await supabase
       .from("documents")
-      .select("id, title, type, status, raw_text, created_at, last_viewed_at")
+      .select("id, title, type, status, raw_text, source_url, original_filename, created_at, last_viewed_at")
       .eq("subject_id", id)
       .order("created_at", { ascending: false })
       .range(content.length, content.length + PAGE_SIZE - 1);
@@ -284,6 +286,99 @@ export default function SubjectPage() {
     e.preventDefault();
     setDragOver(false);
     handleFileUpload(e.dataTransfer.files);
+  };
+
+  // Extract YouTube video ID from URL
+  const extractYouTubeId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    ];
+    for (const p of patterns) {
+      const match = url.match(p);
+      if (match) return match[1];
+    }
+    return null;
+  };
+
+  const handleLinkSubmit = async () => {
+    if (!linkUrl.trim() || !user) return;
+
+    const videoId = extractYouTubeId(linkUrl.trim());
+    if (!videoId) {
+      setUploadError("Please paste a valid YouTube URL");
+      return;
+    }
+
+    // Fetch video title + description
+    let title = `YouTube Video`;
+    let description = "";
+    try {
+      // Try YouTube Data API first (needs GOOGLE_AI_API_KEY with YouTube API enabled)
+      const ytRes = await fetch(`/api/youtube-info?video_id=${videoId}`);
+      if (ytRes.ok) {
+        const ytData = await ytRes.json();
+        title = ytData.title || title;
+        description = ytData.description || "";
+      } else {
+        // Fallback to oEmbed (title + channel only)
+        const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+        if (oembedRes.ok) {
+          const oembed = await oembedRes.json();
+          title = oembed.title || title;
+          description = oembed.author_name ? `${oembed.author_name} · YouTube` : "";
+        }
+      }
+    } catch {
+      // fallback to generic title
+    }
+    const { data: doc, error: insertError } = await supabase
+      .from("documents")
+      .insert({
+        user_id: user.id,
+        subject_id: id,
+        title,
+        type: "youtube",
+        status: "ready",
+        source_url: linkUrl.trim(),
+        original_filename: description || "YouTube Video",
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !doc) {
+      setUploadError("Failed to add video");
+      return;
+    }
+
+    // Fetch transcript in background and update document
+    fetch("/api/youtube-transcript", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ video_id: videoId }),
+    }).then(async (res) => {
+      if (res.ok) {
+        const { rawText } = await res.json();
+        if (rawText) {
+          await supabase
+            .from("documents")
+            .update({
+              raw_text: rawText,
+              status: "indexed",
+              word_count: rawText.split(/\s+/).length,
+            })
+            .eq("id", doc.id);
+
+          // Trigger embedding
+          supabase.functions.invoke("process-document", {
+            body: { document_id: doc.id },
+          });
+        }
+      }
+    });
+
+    setLinkUrl("");
+    setLinkModalOpen(false);
+    router.push(`/subject/${id}/doc/${doc.id}`);
   };
 
   const handleDeleteDocument = async (docId: string) => {
@@ -470,7 +565,7 @@ export default function SubjectPage() {
                     desc: "PDF, DOCX, audio",
                     action: () => setUploadModalOpen(true),
                   },
-                  { icon: Link2, label: "Link", desc: "YouTube, website", action: () => {} },
+                  { icon: Link2, label: "Link", desc: "YouTube, website", action: () => setLinkModalOpen(true) },
                   {
                     icon: ClipboardPaste,
                     label: "Paste",
@@ -568,7 +663,7 @@ export default function SubjectPage() {
             <div className="mt-8 flex items-center gap-3">
               {[
                 { icon: Upload, label: "Upload", action: () => setUploadModalOpen(true) },
-                { icon: Link2, label: "Link", action: () => {} },
+                { icon: Link2, label: "Link", action: () => setLinkModalOpen(true) },
                 { icon: ClipboardPaste, label: "Paste", action: () => {} },
                 { icon: Mic, label: "Record", action: () => {} },
               ].map((item) => (
@@ -896,14 +991,72 @@ export default function SubjectPage() {
                 <Link2 size={15} className="shrink-0 text-ink-muted" />
                 <input
                   type="url"
-                  placeholder="Paste a YouTube or website URL..."
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLinkSubmit()}
+                  placeholder="Paste a YouTube URL..."
                   className="w-full bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/60"
                 />
               </div>
-              <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-white transition-colors hover:bg-ink/80">
+              <button
+                onClick={handleLinkSubmit}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-ink text-white transition-colors hover:bg-ink/80"
+              >
                 <ArrowRight size={15} />
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Link Modal ─── */}
+      {linkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/20 backdrop-blur-[2px]"
+            onClick={() => setLinkModalOpen(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-2xl border border-black/8 bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="font-app-heading text-[17px]">Add Link</h2>
+              <button
+                onClick={() => setLinkModalOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-cream-dark/50 hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="mb-3 font-app text-[13px] text-ink-muted">
+              Paste a YouTube video URL to add it to this subject.
+            </p>
+
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 items-center gap-2 rounded-xl border border-black/8 bg-cream-dark/15 px-4 py-2.5 transition-colors focus-within:border-black/15 focus-within:bg-white">
+                <Link2 size={15} className="shrink-0 text-ink-muted" />
+                <input
+                  autoFocus
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLinkSubmit()}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="w-full bg-transparent font-app text-[13px] outline-none placeholder:text-ink-muted/60"
+                />
+              </div>
+              <button
+                onClick={handleLinkSubmit}
+                disabled={!linkUrl.trim()}
+                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-ink px-4 font-app text-[13px] font-medium text-white transition-colors hover:bg-ink/80 disabled:opacity-40"
+              >
+                Add
+                <ArrowRight size={14} />
+              </button>
+            </div>
+
+            {uploadError && (
+              <p className="mt-2 font-app text-[12px] text-red-600">{uploadError}</p>
+            )}
           </div>
         </div>
       )}

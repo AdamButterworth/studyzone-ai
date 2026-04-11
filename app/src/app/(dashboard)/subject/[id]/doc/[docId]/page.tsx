@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 const NoteEditor = dynamic(() => import("@/components/app/NoteEditor"), { ssr: false });
 import SelectionToolbar from "@/components/app/SelectionToolbar";
+import YouTubeViewer from "@/components/app/YouTubeViewer";
 import {
   MessageSquare,
   FileText,
@@ -208,6 +209,9 @@ export default function DocumentPage() {
 
   /* ── Document data ── */
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [docType, setDocType] = useState<string>("pdf");
+  const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [youtubeTranscript, setYoutubeTranscript] = useState<{ text: string; offset: number; duration: number }[] | null>(null);
   const [docTitle, setDocTitle] = useState("Document");
   const [subjectName, setSubjectName] = useState("");
   const [docLoading, setDocLoading] = useState(true);
@@ -221,13 +225,13 @@ export default function DocumentPage() {
     supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId);
 
     // Skip re-fetch if we already loaded this doc (prevents reload on auth refresh)
-    if (docFetchedRef.current === docId && pdfUrl) return;
+    if (docFetchedRef.current === docId && (pdfUrl || sourceUrl)) return;
 
     const fetchDoc = async () => {
       const [docResult, subjectResult] = await Promise.all([
         supabase
           .from("documents")
-          .select("title, file_path, status")
+          .select("title, file_path, status, type, source_url")
           .eq("id", docId)
           .single(),
         supabase
@@ -239,8 +243,27 @@ export default function DocumentPage() {
 
       if (subjectResult.data?.name) setSubjectName(subjectResult.data.name);
       if (docResult.data?.title) setDocTitle(docResult.data.title);
+      if (docResult.data?.type) setDocType(docResult.data.type);
+      if (docResult.data?.source_url) setSourceUrl(docResult.data.source_url);
 
-      if (docResult.data?.file_path && docResult.data.status !== "uploading") {
+      if (docResult.data?.type === "youtube" && docResult.data.source_url) {
+        // Fetch transcript for YouTube videos
+        const videoIdMatch = docResult.data.source_url.match(
+          /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
+        );
+        if (videoIdMatch) {
+          fetch("/api/youtube-transcript", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ video_id: videoIdMatch[1] }),
+          }).then(async (res) => {
+            if (res.ok) {
+              const { transcript } = await res.json();
+              setYoutubeTranscript(transcript);
+            }
+          });
+        }
+      } else if (docResult.data?.file_path && docResult.data.status !== "uploading") {
         const { data: urlData } = await supabase.storage
           .from("documents")
           .createSignedUrl(docResult.data.file_path, 3600);
@@ -1428,8 +1451,8 @@ export default function DocumentPage() {
     >
       {/* ════════ LEFT: Document Viewer ════════ */}
       <div className={`flex min-w-0 flex-col overflow-hidden bg-[#EFECEA] ${isRightFullscreen ? "hidden" : "flex-1"}`}>
-        {/* PDF toolbar */}
-        <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto border-b border-black/6 bg-white px-5 py-2.5" style={{ scrollbarWidth: "none" }}>
+        {/* PDF toolbar — only for PDFs */}
+        {docType === "pdf" && <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto border-b border-black/6 bg-white px-5 py-2.5" style={{ scrollbarWidth: "none" }}>
           <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
             <button
               onClick={() => goToPage(Math.max(1, currentPage - 1))}
@@ -1529,7 +1552,7 @@ export default function DocumentPage() {
           >
             {isFullscreen ? <Minimize2 size={13} /> : <Expand size={13} />}
           </button>
-        </div>
+        </div>}
 
         {/* Search bar */}
         {searchOpen && (
@@ -1562,6 +1585,11 @@ export default function DocumentPage() {
         <div ref={pdfScrollRef} className="flex-1 overflow-y-auto overflow-x-auto px-4 py-4">
           {docLoading ? (
             <PdfLoadingShell visibleWidth={loadingShellWidth} />
+          ) : docType === "youtube" && sourceUrl ? (
+            <YouTubeViewer
+              videoId={sourceUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/)?.[1] || ""}
+              transcript={youtubeTranscript}
+            />
           ) : pdfUrl ? (
             <div className="relative flex min-w-full w-max flex-col items-center">
               {pdfLoadingShellVisible && (
@@ -1597,8 +1625,8 @@ export default function DocumentPage() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center">
-              <p className="font-app text-[14px] font-medium text-ink">No PDF available</p>
-              <p className="mt-1 font-app text-[13px] text-ink-muted">This document has no file attached yet.</p>
+              <p className="font-app text-[14px] font-medium text-ink">No content available</p>
+              <p className="mt-1 font-app text-[13px] text-ink-muted">This document has no file or link attached yet.</p>
             </div>
           )}
           <div className="h-4" />
