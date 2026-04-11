@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from "react";
+import { flushSync } from "react-dom";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 const NoteEditor = dynamic(() => import("@/components/app/NoteEditor"), { ssr: false });
@@ -215,6 +216,10 @@ export default function DocumentPage() {
 
   useEffect(() => {
     if (!user) return;
+
+    // Always update last_viewed_at
+    supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId);
+
     // Skip re-fetch if we already loaded this doc (prevents reload on auth refresh)
     if (docFetchedRef.current === docId && pdfUrl) return;
 
@@ -243,9 +248,6 @@ export default function DocumentPage() {
       }
       setDocLoading(false);
       docFetchedRef.current = docId;
-
-      // Update last_viewed_at
-      supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId);
     };
     fetchDoc();
   }, [user, docId, subjectId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -621,6 +623,7 @@ export default function DocumentPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [scrollToPage, setScrollToPage] = useState<number | undefined>();
   const [zoom, setZoom] = useState(1);
+  const [displayZoom, setDisplayZoom] = useState(1);
   const [pdfBaseWidth, setPdfBaseWidth] = useState(() => lastKnownPdfVisibleWidth);
   const [pdfFirstPageReady, setPdfFirstPageReady] = useState(false);
   const [pdfLoadingShellVisible, setPdfLoadingShellVisible] = useState(true);
@@ -630,6 +633,7 @@ export default function DocumentPage() {
   const [searchResultCount, setSearchResultCount] = useState<number | null>(null);
   const pdfScrollRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const displayZoomRef = useRef(1);
   const [selectionToolbar, setSelectionToolbar] = useState<{
     text: string;
     rect: { top: number; left: number; bottom: number; width: number };
@@ -654,6 +658,19 @@ export default function DocumentPage() {
   const ZOOM_MAX = 2.5;
   const ZOOM_STEP = 0.15;
   const MIN_PDF_RENDER_WIDTH = 960;
+  const clampZoom = useCallback(
+    (nextZoom: number) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextZoom)),
+    [ZOOM_MIN, ZOOM_MAX]
+  );
+  const setZoomLevel = useCallback(
+    (nextZoom: number) => {
+      const clampedZoom = clampZoom(nextZoom);
+      displayZoomRef.current = clampedZoom;
+      setDisplayZoom(clampedZoom);
+      setZoom(clampedZoom);
+    },
+    [clampZoom]
+  );
 
   const handleSearch = useCallback(() => {
     if (!searchQuery.trim() || !pdfScrollRef.current) {
@@ -774,6 +791,119 @@ export default function DocumentPage() {
       container.removeEventListener("scroll", handleScroll);
     };
   }, []);
+
+  // Keep pinch zoom visually smooth, then commit one PDF rerender after the gesture settles.
+  useEffect(() => {
+    const container = pdfScrollRef.current;
+    if (!container) return;
+
+    let pendingFrame: number | null = null;
+    let pendingAnchorFrame: number | null = null;
+    let commitTimer: number | null = null;
+    let accumulated = 0;
+
+    const commitZoom = () => {
+      commitTimer = null;
+      setZoom((currentZoom) => {
+        const nextZoom = displayZoomRef.current;
+        return Math.abs(currentZoom - nextZoom) < 0.001 ? currentZoom : nextZoom;
+      });
+    };
+
+    const scheduleCommit = () => {
+      if (commitTimer !== null) window.clearTimeout(commitTimer);
+      commitTimer = window.setTimeout(commitZoom, 120);
+    };
+
+    const positionAnchor = (
+      pageNumber: number,
+      relativeX: number,
+      relativeY: number,
+      cursorX: number,
+      cursorY: number
+    ) => {
+      const containerRect = container.getBoundingClientRect();
+      const updatedPage = container.querySelector(`[data-page="${pageNumber}"]`);
+      const afterRect =
+        updatedPage instanceof HTMLElement ? updatedPage.getBoundingClientRect() : null;
+
+      if (!afterRect || afterRect.width <= 0 || afterRect.height <= 0) return;
+
+      const nextContentOffsetLeft =
+        container.scrollLeft + (afterRect.left - containerRect.left);
+      const nextContentOffsetTop =
+        container.scrollTop + (afterRect.top - containerRect.top);
+      const nextScrollLeft =
+        nextContentOffsetLeft + relativeX * afterRect.width - cursorX;
+      const nextScrollTop =
+        nextContentOffsetTop + relativeY * afterRect.height - cursorY;
+
+      container.scrollLeft = nextScrollLeft;
+      container.scrollTop = nextScrollTop;
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      accumulated += -e.deltaY * 0.003;
+      const clientX = e.clientX;
+      const clientY = e.clientY;
+
+      if (pendingFrame !== null) return;
+
+      pendingFrame = requestAnimationFrame(() => {
+        pendingFrame = null;
+        const nextZoom = clampZoom(displayZoomRef.current + accumulated);
+        accumulated = 0;
+        const containerRect = container.getBoundingClientRect();
+        const hoveredElement = document.elementFromPoint(clientX, clientY);
+        const pageElement = hoveredElement?.closest("[data-page]");
+        const pageNumber = pageElement?.getAttribute("data-page");
+        const pageNumberValue = pageNumber ? Number(pageNumber) : null;
+        const beforeRect =
+          pageElement instanceof HTMLElement ? pageElement.getBoundingClientRect() : null;
+        const cursorX = clientX - containerRect.left;
+        const cursorY = clientY - containerRect.top;
+        const relativeX =
+          beforeRect && beforeRect.width > 0
+            ? Math.max(0, Math.min(1, (clientX - beforeRect.left) / beforeRect.width))
+            : null;
+        const relativeY =
+          beforeRect && beforeRect.height > 0
+            ? Math.max(0, Math.min(1, (clientY - beforeRect.top) / beforeRect.height))
+            : null;
+
+        displayZoomRef.current = nextZoom;
+        flushSync(() => {
+          setDisplayZoom(nextZoom);
+        });
+
+        if (
+          pageNumberValue !== null &&
+          Number.isFinite(pageNumberValue) &&
+          relativeX !== null &&
+          relativeY !== null
+        ) {
+          positionAnchor(pageNumberValue, relativeX, relativeY, cursorX, cursorY);
+          if (pendingAnchorFrame !== null) cancelAnimationFrame(pendingAnchorFrame);
+          pendingAnchorFrame = requestAnimationFrame(() => {
+            pendingAnchorFrame = null;
+            positionAnchor(pageNumberValue, relativeX, relativeY, cursorX, cursorY);
+          });
+        }
+
+        scheduleCommit();
+      });
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+      if (pendingFrame !== null) cancelAnimationFrame(pendingFrame);
+      if (pendingAnchorFrame !== null) cancelAnimationFrame(pendingAnchorFrame);
+      if (commitTimer !== null) window.clearTimeout(commitTimer);
+    };
+  }, [clampZoom]);
 
   // Chat text selection detection
   useEffect(() => {
@@ -1286,9 +1416,9 @@ export default function DocumentPage() {
     renderBaseWidth > 0 ? renderBaseWidth * zoom : undefined;
   const livePdfScale =
     renderBaseWidth > 0
-      ? visiblePdfBaseWidth / renderBaseWidth
+      ? (visiblePdfBaseWidth / renderBaseWidth) * (displayZoom / zoom)
       : 1;
-  const loadingShellWidth = visiblePdfBaseWidth * zoom;
+  const loadingShellWidth = visiblePdfBaseWidth * displayZoom;
 
   return (
     <div
@@ -1355,22 +1485,22 @@ export default function DocumentPage() {
           <div className="mx-1 h-4 w-px bg-black/8" />
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
-              disabled={zoom <= ZOOM_MIN}
+              onClick={() => setZoomLevel(displayZoom - ZOOM_STEP)}
+              disabled={displayZoom <= ZOOM_MIN}
               className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
             >
               <ZoomOut size={13} />
             </button>
             <button
-              onClick={() => setZoom(1)}
+              onClick={() => setZoomLevel(1)}
               className="font-app text-[13px] tabular-nums text-ink-light w-10 text-center hover:text-ink transition-colors"
               title="Reset to 100%"
             >
-              {Math.round(zoom * 100)}%
+              {Math.round(displayZoom * 100)}%
             </button>
             <button
-              onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
-              disabled={zoom >= ZOOM_MAX}
+              onClick={() => setZoomLevel(displayZoom + ZOOM_STEP)}
+              disabled={displayZoom >= ZOOM_MAX}
               className="rounded p-1 text-ink-muted transition-colors hover:bg-black/5 hover:text-ink disabled:opacity-30"
             >
               <ZoomIn size={13} />
@@ -1433,7 +1563,7 @@ export default function DocumentPage() {
           {docLoading ? (
             <PdfLoadingShell visibleWidth={loadingShellWidth} />
           ) : pdfUrl ? (
-            <div className="relative flex flex-col items-center">
+            <div className="relative flex min-w-full w-max flex-col items-center">
               {pdfLoadingShellVisible && (
                 <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
                   <div
@@ -1768,26 +1898,42 @@ export default function DocumentPage() {
 
               {/* Ask anything — organic pill input */}
               <div className="shrink-0 px-5 pb-5">
-                <label className="flex cursor-text items-center rounded-full border border-black/10 bg-white pr-4 shadow-sm transition-all focus-within:border-black/16 focus-within:shadow-md">
-                  <input
-                    type="text"
-                    value={homeQuery}
-                    onChange={(e) => setHomeQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleHomeAsk()}
-                    placeholder="Ask anything..."
-                    className="w-full rounded-full bg-transparent px-6 py-4 font-app text-[15px] outline-none placeholder:text-ink-muted/50"
-                  />
-                  <button
-                    onClick={handleHomeAsk}
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
-                      homeQuery.trim()
-                        ? "bg-ink text-white hover:bg-ink/80"
-                        : "text-ink-muted/40"
-                    }`}
-                  >
-                    <ArrowRight size={15} />
-                  </button>
-                </label>
+                <div className="overflow-hidden rounded-2xl border border-black/8 bg-white shadow-md transition-all focus-within:shadow-lg">
+                  <div className="relative">
+                    <textarea
+                      value={homeQuery}
+                      onChange={(e) => setHomeQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleHomeAsk();
+                        }
+                      }}
+                      placeholder="Ask anything..."
+                      rows={1}
+                      className="block min-h-[40px] w-full resize-none bg-transparent px-5 pt-4 pb-3 font-app text-[15px] leading-relaxed outline-none placeholder:text-ink-muted/50"
+                      style={{ maxHeight: 150 }}
+                      onInput={(e) => {
+                        const t = e.currentTarget;
+                        t.style.height = "auto";
+                        t.style.height = Math.min(t.scrollHeight, 150) + "px";
+                      }}
+                    />
+                    <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent" />
+                  </div>
+                  <div className="flex justify-end px-4 pb-3">
+                    <button
+                      onClick={handleHomeAsk}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+                        homeQuery.trim()
+                          ? "bg-ink text-white hover:bg-ink/80"
+                          : "text-ink-muted/40"
+                      }`}
+                    >
+                      <ArrowRight size={15} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1913,8 +2059,9 @@ export default function DocumentPage() {
               )}
 
               {/* Chat input */}
-              <div className="shrink-0 px-4 pb-4 pt-2">
-                <div className="rounded-[24px] border border-black/8 bg-white shadow-sm transition-all focus-within:border-black/14 focus-within:shadow-md">
+              <div className="shrink-0 px-4 pb-4">
+                <div className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white">
+                  <div className="relative">
                   <textarea
                     ref={chatTextareaRef}
                     value={chatInput}
@@ -1928,7 +2075,7 @@ export default function DocumentPage() {
                     placeholder="Ask anything..."
                     disabled={chatLoading}
                     rows={1}
-                    className="min-h-[36px] w-full resize-none bg-transparent px-5 pt-3 pb-1 font-app text-[14px] leading-relaxed outline-none placeholder:text-ink-muted disabled:opacity-60"
+                    className="block min-h-[64px] w-full resize-none bg-transparent px-5 pt-3.5 pb-3 font-app text-[14px] leading-relaxed outline-none placeholder:text-ink-muted disabled:opacity-60"
                     style={{ maxHeight: 200 }}
                     onInput={(e) => {
                       const t = e.currentTarget;
@@ -1936,7 +2083,9 @@ export default function DocumentPage() {
                       t.style.height = Math.min(t.scrollHeight, 120) + "px";
                     }}
                   />
-                  <div className="flex justify-end px-3 pb-2.5">
+                  <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-3 bg-gradient-to-t from-white/90 to-transparent" />
+                  </div>
+                  <div className="flex justify-end px-3 pb-2">
                   <button
                     onClick={handleSendMessage}
                     disabled={chatLoading}

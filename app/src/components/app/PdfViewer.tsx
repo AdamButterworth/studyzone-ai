@@ -336,6 +336,7 @@ export default function PdfViewer({
         }
       >
         <div
+          data-pdf-zoom-content
           className="relative"
           style={{ width: scaledWidth, height: scaledHeight }}
         >
