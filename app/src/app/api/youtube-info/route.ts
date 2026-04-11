@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-const GOOGLE_API_KEY = process.env.GOOGLE_AI_API_KEY!;
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || process.env.GOOGLE_AI_API_KEY!;
 
 export async function GET(req: NextRequest) {
   const videoId = req.nextUrl.searchParams.get("video_id");
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${GOOGLE_API_KEY}`
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`
     );
 
     if (!res.ok) {
