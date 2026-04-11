@@ -95,20 +95,44 @@ export default function YouTubeViewer({ videoId, transcript }: YouTubeViewerProp
     };
   }, [videoId]);
 
-  // Pause auto-scroll on user wheel/touch (not programmatic scroll)
+  // Pause auto-scroll on any user interaction with the transcript
+  const autoScrollRef = useRef(autoScroll);
+  autoScrollRef.current = autoScroll;
+  const programmaticScrollRef = useRef(false);
+  const lastAutoScrolledIdxRef = useRef<number | null>(null);
+  const disableAutoScroll = useCallback(() => {
+    if (autoScrollRef.current) {
+      programmaticScrollRef.current = false;
+      setAutoScroll(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!autoScroll) {
+      lastAutoScrolledIdxRef.current = null;
+    }
+  }, [autoScroll]);
+
   useEffect(() => {
     const container = transcriptRef.current;
     if (!container) return;
     const handleUserScroll = () => {
-      if (autoScroll) setAutoScroll(false);
+      if (programmaticScrollRef.current) return; // ignore our own scrolls
+      disableAutoScroll();
     };
-    container.addEventListener("wheel", handleUserScroll);
-    container.addEventListener("touchmove", handleUserScroll);
+    const handleUserIntent = () => {
+      disableAutoScroll();
+    };
+
+    container.addEventListener("scroll", handleUserScroll);
+    container.addEventListener("wheel", handleUserIntent, { passive: true });
+    container.addEventListener("touchmove", handleUserIntent, { passive: true });
     return () => {
-      container.removeEventListener("wheel", handleUserScroll);
-      container.removeEventListener("touchmove", handleUserScroll);
+      container.removeEventListener("scroll", handleUserScroll);
+      container.removeEventListener("wheel", handleUserIntent);
+      container.removeEventListener("touchmove", handleUserIntent);
     };
-  }, [autoScroll]);
+  }, [disableAutoScroll]);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -119,10 +143,17 @@ export default function YouTubeViewer({ videoId, transcript }: YouTubeViewerProp
         currentTime >= seg.offset &&
         (i === grouped.length - 1 || currentTime < grouped[i + 1].offset)
     );
-    if (activeIdx >= 0) {
+    if (activeIdx >= 0 && activeIdx !== lastAutoScrolledIdxRef.current) {
       const el = transcriptRef.current.children[activeIdx] as HTMLElement;
       if (el) {
+        programmaticScrollRef.current = true;
+        lastAutoScrolledIdxRef.current = activeIdx;
         el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        // Reset flag after scroll completes
+        const timer = window.setTimeout(() => {
+          programmaticScrollRef.current = false;
+        }, 500);
+        return () => window.clearTimeout(timer);
       }
     }
   }, [currentTime, autoScroll, transcript]);
