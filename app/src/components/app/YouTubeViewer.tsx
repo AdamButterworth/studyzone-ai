@@ -44,43 +44,71 @@ function groupSegments(segments: TranscriptSegment[], intervalMs = 30000): Trans
   return groups;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare global { interface Window { YT: any; onYouTubeIframeAPIReady: (() => void) | undefined; } }
+
 export default function YouTubeViewer({ videoId, transcript }: YouTubeViewerProps) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const transcriptRef = useRef<HTMLDivElement>(null);
   const [currentTime, setCurrentTime] = useState(0); // ms
   const [autoScroll, setAutoScroll] = useState(true);
-  const playerReadyRef = useRef(false);
 
-  // Poll current time from YouTube iframe API
+  // Load YouTube IFrame API and create player
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!iframeRef.current?.contentWindow) return;
-      iframeRef.current.contentWindow.postMessage(
-        JSON.stringify({ event: "command", func: "getCurrentTime", args: [] }),
-        "*"
-      );
-    }, 1000);
+    let interval: NodeJS.Timeout;
 
-    const handleMessage = (e: MessageEvent) => {
-      try {
-        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-        if (data.event === "infoDelivery" && data.info?.currentTime !== undefined) {
-          setCurrentTime(data.info.currentTime * 1000);
-        }
-        if (data.event === "onReady") {
-          playerReadyRef.current = true;
-        }
-      } catch {
-        // ignore non-JSON messages
-      }
+    const createPlayer = () => {
+      if (!playerContainerRef.current || !window.YT?.Player) return;
+      playerRef.current = new window.YT.Player(playerContainerRef.current, {
+        videoId,
+        playerVars: { autoplay: 0, modestbranding: 1, rel: 0 },
+        events: {
+          onReady: () => {
+            // Poll current time
+            interval = setInterval(() => {
+              if (playerRef.current?.getCurrentTime) {
+                setCurrentTime(playerRef.current.getCurrentTime() * 1000);
+              }
+            }, 500);
+          },
+        },
+      });
     };
 
-    window.addEventListener("message", handleMessage);
+    if (window.YT?.Player) {
+      createPlayer();
+    } else {
+      // Load the API script
+      if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+      }
+      window.onYouTubeIframeAPIReady = createPlayer;
+    }
+
     return () => {
       clearInterval(interval);
-      window.removeEventListener("message", handleMessage);
+      if (playerRef.current?.destroy) playerRef.current.destroy();
+      playerRef.current = null;
     };
-  }, []);
+  }, [videoId]);
+
+  // Pause auto-scroll on user wheel/touch (not programmatic scroll)
+  useEffect(() => {
+    const container = transcriptRef.current;
+    if (!container) return;
+    const handleUserScroll = () => {
+      if (autoScroll) setAutoScroll(false);
+    };
+    container.addEventListener("wheel", handleUserScroll);
+    container.addEventListener("touchmove", handleUserScroll);
+    return () => {
+      container.removeEventListener("wheel", handleUserScroll);
+      container.removeEventListener("touchmove", handleUserScroll);
+    };
+  }, [autoScroll]);
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -100,12 +128,10 @@ export default function YouTubeViewer({ videoId, transcript }: YouTubeViewerProp
   }, [currentTime, autoScroll, transcript]);
 
   const seekTo = useCallback((offsetMs: number) => {
-    if (!iframeRef.current?.contentWindow) return;
-    iframeRef.current.contentWindow.postMessage(
-      JSON.stringify({ event: "command", func: "seekTo", args: [offsetMs / 1000, true] }),
-      "*"
-    );
-    setCurrentTime(offsetMs);
+    if (playerRef.current?.seekTo) {
+      playerRef.current.seekTo(offsetMs / 1000, true);
+      setCurrentTime(offsetMs);
+    }
   }, []);
 
   return (
@@ -113,19 +139,30 @@ export default function YouTubeViewer({ videoId, transcript }: YouTubeViewerProp
       {/* Video Player */}
       <div className="shrink-0 overflow-hidden rounded-xl mx-3 mt-3 bg-black">
         <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
-          <iframe
-            ref={iframeRef}
-            src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}`}
-            className="absolute inset-0 w-full h-full"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          />
+          <div ref={playerContainerRef} className="absolute inset-0 w-full h-full" />
         </div>
       </div>
 
       {/* Transcript Section */}
       {transcript && transcript.length > 0 && (
         <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Transcript header */}
+          <div className="flex shrink-0 items-center justify-between px-5 pt-3 pb-1">
+            <span className="font-app text-[12px] font-medium uppercase tracking-wider text-ink-muted">Transcript</span>
+            <button
+              onClick={() => setAutoScroll(!autoScroll)}
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 font-app text-[11px] font-medium transition-colors ${
+                autoScroll
+                  ? "bg-black/[0.05] text-ink"
+                  : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                <path d="m7 15 5 5 5-5" /><path d="m7 9 5-5 5 5" />
+              </svg>
+              Auto Scroll
+            </button>
+          </div>
 
           {/* Transcript Content */}
           <div ref={transcriptRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
@@ -138,7 +175,7 @@ export default function YouTubeViewer({ videoId, transcript }: YouTubeViewerProp
                 <div
                   key={i}
                   className={`group cursor-pointer rounded-lg px-3 py-2 -mx-3 transition-colors ${
-                    isActive ? "bg-cream-dark/50" : "hover:bg-cream-dark/30"
+                    isActive ? "bg-black/[0.07]" : "hover:bg-black/[0.03]"
                   }`}
                   onClick={() => seekTo(seg.offset)}
                 >

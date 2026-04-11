@@ -704,7 +704,7 @@ export default function SubjectPage() {
                 <div key={item.id} className="relative">
                   <Link
                     href={`/subject/${id}/doc/${item.id}`}
-                    className="group flex items-center gap-4 border-b border-black/[0.03] px-3 py-3 transition-colors hover:bg-white/60"
+                    className="group flex items-center gap-4 border-b border-black/[0.03] px-3 py-3 rounded-lg transition-colors hover:bg-black/[0.03]"
                   >
                     {/* Thumbnail */}
                     <div

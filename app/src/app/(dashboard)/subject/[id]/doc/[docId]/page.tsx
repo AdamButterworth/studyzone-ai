@@ -222,7 +222,9 @@ export default function DocumentPage() {
     if (!user) return;
 
     // Always update last_viewed_at
-    supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId);
+    supabase.from("documents").update({ last_viewed_at: new Date().toISOString() }).eq("id", docId).then(({ error }) => {
+      if (error) console.error("last_viewed_at update failed:", error);
+    });
 
     // Skip re-fetch if we already loaded this doc (prevents reload on auth refresh)
     if (docFetchedRef.current === docId && (pdfUrl || sourceUrl)) return;
@@ -1189,8 +1191,8 @@ export default function DocumentPage() {
       .single();
 
     if (data) {
-      const separator = data.content ? "<hr><p></p>" : "";
-      const newContent = `${data.content || ""}${separator}<blockquote><p>${text}</p></blockquote><p></p>`;
+      const separator = data.content ? "<p></p>" : "";
+      const newContent = `${data.content || ""}${separator}<p>${text}</p><p></p>`;
       await supabase
         .from("notes")
         .update({ content: newContent, updated_at: new Date().toISOString() })
@@ -1209,7 +1211,7 @@ export default function DocumentPage() {
     if (!user) return;
     const { data: noteRow } = await supabase
       .from("notes")
-      .insert({ document_id: docId, user_id: user.id, title: "New Note", content: `<blockquote><p>${text}</p></blockquote><p></p>` })
+      .insert({ document_id: docId, user_id: user.id, title: "New Note", content: `<p>${text}</p><p></p>` })
       .select("id")
       .single();
 
@@ -1217,7 +1219,7 @@ export default function DocumentPage() {
       const newTab: Tab = { id: Date.now().toString(), type: "notes", label: "New Note", noteId: noteRow.id };
       setTabs((prev) => [...prev, newTab]);
       setActiveTabId(newTab.id);
-      setNoteData((prev) => ({ ...prev, [noteRow.id]: { title: "New Note", content: `<blockquote><p>${text}</p></blockquote><p></p>` } }));
+      setNoteData((prev) => ({ ...prev, [noteRow.id]: { title: "New Note", content: `<p>${text}</p><p></p>` } }));
       setResourceRefresh((n) => n + 1);
     }
   };
